@@ -1,8 +1,6 @@
 # src/data_processor.py
 import pandas as pd
-import numpy as np
 from typing import Tuple, Dict
-from datetime import datetime
 
 class DataProcessor:
     """Process and aggregate data"""
@@ -10,32 +8,19 @@ class DataProcessor:
     @staticmethod
     def extract_grade_spec(item_text: str) -> str:
         """
-        Extract grade/spec from ITEM description
-        Hierarchy: IP < EP < USP
-        Default: USP if none found
+        Extract grade/spec from ITEM description.
+        Hierarchy (highest wins): USP > EP > IP. Defaults to USP if none found.
         """
         if not isinstance(item_text, str):
             return 'USP'
-        
         item_lower = item_text.lower()
-        found_specs = []
-        
-        if 'ip' in item_lower:
-            found_specs.append('IP')
-        if 'ep' in item_lower:
-            found_specs.append('EP')
         if 'usp' in item_lower:
-            found_specs.append('USP')
-        
-        # Apply hierarchy
-        if 'USP' in found_specs:
             return 'USP'
-        elif 'EP' in found_specs:
+        if 'ep' in item_lower:
             return 'EP'
-        elif 'IP' in found_specs:
+        if 'ip' in item_lower:
             return 'IP'
-        else:
-            return 'USP'  # Default
+        return 'USP'
     
     @staticmethod
     def extract_yyyymm(date_col) -> str:
@@ -132,44 +117,26 @@ class DataProcessor:
         }
     
     @staticmethod
+    def _aggregate_entity(df: pd.DataFrame, entity_col: str, entity_alias: str, source: str) -> pd.DataFrame:
+        """Shared aggregation logic for supplier and buyer views."""
+        agg_df = df.groupby([entity_col, 'yyyymm', 'UQC', 'GRADE_SPEC']).agg(
+            Sum_of_QTY=('QTY', 'sum'),
+            Sum_of_TOTAL_VALUE=('TOTAL_VALUE', 'sum')
+        ).reset_index()
+        agg_df.rename(columns={entity_col: entity_alias, 'UQC': 'uom'}, inplace=True)
+        agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
+        agg_df['source'] = source
+        return agg_df[[entity_alias, 'yyyymm', 'uom', 'GRADE_SPEC', 'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]
+
+    @staticmethod
     def aggregate_supplier(df: pd.DataFrame) -> pd.DataFrame:
         """Aggregate data by Supplier"""
-        agg_df = df.groupby(['Supp_Name', 'yyyymm', 'UQC', 'GRADE_SPEC']).agg({
-            'QTY': 'sum',
-            'TOTAL_VALUE': 'sum'
-        }).reset_index()
-        
-        agg_df.rename(columns={
-            'Supp_Name': 'supplier',
-            'UQC': 'uom',
-            'QTY': 'Sum_of_QTY',
-            'TOTAL_VALUE': 'Sum_of_TOTAL_VALUE'
-        }, inplace=True)
-        
-        agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
-        agg_df['source'] = 'Supplier'
-        
-        return agg_df[['supplier', 'yyyymm', 'uom', 'GRADE_SPEC', 'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]
-    
+        return DataProcessor._aggregate_entity(df, 'Supp_Name', 'supplier', 'Supplier')
+
     @staticmethod
     def aggregate_buyer(df: pd.DataFrame) -> pd.DataFrame:
         """Aggregate data by Buyer (Importer)"""
-        agg_df = df.groupby(['IMPORTER', 'yyyymm', 'UQC', 'GRADE_SPEC']).agg({
-            'QTY': 'sum',
-            'TOTAL_VALUE': 'sum'
-        }).reset_index()
-        
-        agg_df.rename(columns={
-            'IMPORTER': 'buyer',
-            'UQC': 'uom',
-            'QTY': 'Sum_of_QTY',
-            'TOTAL_VALUE': 'Sum_of_TOTAL_VALUE'
-        }, inplace=True)
-        
-        agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
-        agg_df['source'] = 'Buyer'
-        
-        return agg_df[['buyer', 'yyyymm', 'uom', 'GRADE_SPEC', 'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]
+        return DataProcessor._aggregate_entity(df, 'IMPORTER', 'buyer', 'Buyer')
     
     @staticmethod
     def aggregate_cipla(cipla_df: pd.DataFrame, molecule_name: str = 'unknown') -> pd.DataFrame:
