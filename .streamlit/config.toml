@@ -1,16 +1,12 @@
-# .streamlit/config.toml
 [theme]
-primaryColor = "#00b4d8"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f4f8"
-textColor = "#0a2342"
+primaryColor = "#3b82f6"
+backgroundColor = "#f4f6fb"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"
 font = "sans serif"
 
-[logger]
-level = "info"
-
-[client]
-showErrorDetails = true
-
 [server]
-maxUploadSize = 200
+headless = true
+
+[browser]
+gatherUsageStats = false
