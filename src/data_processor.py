@@ -41,7 +41,9 @@ class DataProcessor:
     def extract_yyyymm(date_col) -> str:
         """Extract yyyymm from date"""
         try:
-            if isinstance(date_col, str):
+            if isinstance(date_col, (int, float)):
+                date_obj = pd.to_datetime(str(int(date_col)), format='%Y%m%d')
+            elif isinstance(date_col, str):
                 date_obj = pd.to_datetime(date_col)
             else:
                 date_obj = date_col
@@ -170,7 +172,7 @@ class DataProcessor:
         return agg_df[['buyer', 'yyyymm', 'uom', 'GRADE_SPEC', 'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]
     
     @staticmethod
-    def aggregate_cipla(cipla_df: pd.DataFrame) -> pd.DataFrame:
+    def aggregate_cipla(cipla_df: pd.DataFrame, molecule_name: str = 'unknown') -> pd.DataFrame:
         """Aggregate Cipla data"""
         agg_df = cipla_df.groupby(['yyyymm', 'base_unit_of_measure', 'grade_spec']).agg({
             'quantity': 'sum',
@@ -186,6 +188,6 @@ class DataProcessor:
         
         agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
         agg_df['source'] = 'Cipla'
-        agg_df['api'] = 'AZITHROMYCIN'
+        agg_df['api'] = molecule_name.upper()
         
         return agg_df[['api', 'yyyymm', 'uom', 'GRADE_SPEC', 'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]

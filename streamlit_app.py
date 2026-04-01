@@ -141,7 +141,7 @@ if st.session_state.selected_molecule:
     
     # Load data with spinner
     with st.spinner(f"Loading data for {selected_mol.upper()}..."):
-        result = pipeline.run_pipeline(selected_mol)
+        result = run_processing_pipeline(selected_mol, file_discovery)
     
     if result['status'] == 'failed':
         st.error(f"❌ Failed to load data: {', '.join(result['errors'])}")
@@ -406,7 +406,7 @@ if st.session_state.selected_molecule:
             color_continuous_scale='RdYlGn_r'
         )
         
-        fig.axhline(y=0, line_dash="dash", line_color="black", annotation_text="Baseline")
+        fig.add_hline(y=0, line_dash="dash", line_color="black", annotation_text="Baseline")
         
         st.plotly_chart(fig, use_container_width=True)
         
