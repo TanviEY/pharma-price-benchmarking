@@ -100,16 +100,12 @@ def _render_sparkline(monthly_values, color="#3b82f6") -> str:
             pct = 0.5
         else:
             pct = 0.05
-        h = int(5 + pct * 19)
+        h = int(5 + pct * 17)
+        h = max(3, min(h, 22))
         bars += (
-            f'<div style="display:inline-block;width:5px;height:{h}px;'
-            f'background:{color};margin:0 1px;border-radius:1px;'
-            f'vertical-align:bottom;opacity:0.8;"></div>'
+            f'<div style="background:{color};height:{h}px;opacity:0.8;"></div>'
         )
-    return (
-        f'<div style="display:flex;align-items:flex-end;gap:1px;'
-        f'margin-top:6px;height:26px;">{bars}</div>'
-    )
+    return f'<div class="pi-sparkline">{bars}</div>'
 
 
 # ─── page config ─────────────────────────────────────────────────────────────
@@ -140,13 +136,24 @@ header {visibility: hidden;}
 [data-testid="stSidebar"] {display: none;}
 .block-container {
   padding-top: 0 !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
+  padding-left: 1.5rem !important;
+  padding-right: 1.5rem !important;
+  padding-bottom: 2rem !important;
   max-width: 100% !important;
 }
 [data-testid="stAppViewContainer"] { background: var(--bg); }
 [data-testid="stVerticalBlock"] { gap: 0 !important; }
 div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
+div[data-testid="stHorizontalBlock"] {
+  gap: 1rem !important;
+  align-items: stretch !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+  min-width: 0 !important;
+}
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {
+  padding-bottom: 0 !important;
+}
 
 /* ── NAV BAR ── */
 .pi-navbar {
@@ -156,8 +163,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 2rem;
-  position: sticky;
-  top: 0;
+  position: relative;
+  margin: 0 -1.5rem 0 -1.5rem;
   z-index: 999;
 }
 .pi-brand-name { font-size: 1.2rem; font-weight: 800; color: var(--t1); }
@@ -186,7 +193,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 /* ── HERO ── */
 .pi-hero {
   background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #1d4ed8 100%);
-  padding: 2.2rem 2rem 1.8rem 2rem;
+  margin: 0 -1.5rem 1.5rem -1.5rem;
+  padding: 2rem 2rem 1.5rem 2rem;
 }
 .pi-hero-title {
   font-size: 1.9rem; font-weight: 800; color: #ffffff; margin-bottom: 0.4rem;
@@ -204,7 +212,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
   padding: 1rem 1.5rem 0.5rem 1.5rem;
-  margin: -1rem 1.5rem 0.5rem 1.5rem;
+  margin: 1rem auto 0 auto;
   position: relative;
   z-index: 10;
 }
@@ -227,7 +235,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 .pi-analyse-btn > button:hover { opacity: 0.9; }
 
 /* Recent tag pills (Streamlit buttons styled as pills) */
-.pi-tag-row { padding: 0.4rem 1.5rem 0.6rem 1.5rem; }
+.pi-tag-row { padding: 0.4rem 0 0.6rem 0; }
 .pi-tag-row .stButton > button {
   background: rgba(255,255,255,0.15) !important;
   color: #ffffff !important;
@@ -248,7 +256,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.07);
   padding: 1rem 1.5rem;
-  margin: 1rem 1.5rem 0 1.5rem;
+  margin: 1rem 0 0 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -267,7 +275,11 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   background:var(--subtle); color:var(--t2);
   padding:2px 10px; border-radius:20px;
   font-size:0.72rem; font-weight:500; margin:2px;
+  white-space: nowrap;
 }
+
+/* ── MATERIAL BANNER CHIPS ── */
+.pi-mat-chips { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
 
 /* Export buttons (Streamlit) */
 .pi-export-row .stButton > button,
@@ -284,9 +296,14 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 
 /* ── KPI CARDS ── */
 .pi-kpi-card {
-  background: #ffffff; border-radius: 12px;
+  background: #ffffff;
+  border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-  padding: 1rem 1.1rem; border-top: 3px solid var(--blue); height: 100%;
+  padding: 1rem 1.1rem 0.9rem;
+  border-top: 3px solid var(--blue);
+  min-height: 140px;
+  height: 100%;
+  overflow: hidden;
 }
 .pi-kpi-label {
   font-size: 0.67rem; font-weight: 700; color: var(--t3);
@@ -314,16 +331,34 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 .pi-section-title { font-size:1rem; font-weight:700; color:var(--t1); margin-bottom:0.2rem; }
 .pi-section-sub { font-size:0.78rem; color:var(--t3); margin-bottom:0.8rem; }
 
-/* ── HORIZONTAL BAR CHART ── */
-.pi-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
-.pi-bar-label {
-  width:170px; font-size:0.78rem; color:var(--t1); font-weight:500;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0;
+/* ── SPARKLINES ── */
+.pi-sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  margin-top: 8px;
+  overflow: hidden;
 }
-.pi-bar-label.cipla { font-weight:700; color:var(--blue-dk); }
+.pi-sparkline > div {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  min-height: 3px;
+  max-height: 22px;
+}
+
+/* ── HORIZONTAL BAR CHART ── */
+.pi-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pi-bar-label {
+  width: 150px; min-width: 150px; flex-shrink: 0;
+  font-size: 0.75rem; font-weight: 600; color: #334155;
+  text-align: right; padding-right: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pi-bar-label.cipla { font-weight: 700; color: var(--blue-dk); }
 .pi-bar-track {
-  flex:1; height:26px; background:var(--subtle); border-radius:4px;
-  overflow:hidden; position:relative;
+  flex: 1; min-width: 0; height: 26px; background: var(--subtle); border-radius: 7px;
+  overflow: hidden; position: relative;
 }
 .pi-bar-fill {
   height:100%; border-radius:4px; display:flex; align-items:center;
@@ -338,16 +373,19 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 }
 
 /* ── COMPETITOR TABLE ── */
-.pi-comp-table { width:100%; border-collapse:collapse; font-size:0.78rem; }
+.pi-comp-table { width:100%; border-collapse:collapse; font-size:0.78rem; table-layout:fixed; }
 .pi-comp-table th {
   background:var(--subtle); color:var(--t3); padding:0.45rem 0.65rem;
   text-align:left; font-weight:600; font-size:0.67rem;
   text-transform:uppercase; letter-spacing:0.5px; border-bottom:2px solid var(--border);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .pi-comp-table td {
   padding:0.45rem 0.65rem; color:var(--t1);
   border-bottom:1px solid var(--border); vertical-align:middle;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
+.pi-comp-table td:first-child { white-space:normal; word-break:break-word; }
 .pi-comp-table tr.cipla-row td { background:var(--blue-lt) !important; }
 .pi-comp-table tr:hover td { background:var(--subtle); }
 .pi-av {
@@ -357,15 +395,18 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 }
 
 /* ── DATA TABLES ── */
-.pi-data-table { width:100%; border-collapse:collapse; font-size:0.78rem; }
+.pi-data-table { width:100%; border-collapse:collapse; font-size:0.78rem; table-layout:fixed; }
 .pi-data-table th {
   background:var(--subtle); color:var(--t3); padding:0.4rem 0.65rem;
   text-align:left; font-weight:600; font-size:0.67rem;
   text-transform:uppercase; letter-spacing:0.4px; border-bottom:2px solid var(--border);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .pi-data-table td {
   padding:0.4rem 0.65rem; color:var(--t1); border-bottom:1px solid var(--border);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
+.pi-data-table td:first-child { white-space:normal; word-break:break-word; }
 .pi-data-table tr.footer-row td {
   font-weight:700; background:var(--subtle) !important; border-top:2px solid var(--border);
 }
@@ -388,15 +429,19 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 
 /* ── FOOTER ── */
 .pi-footer {
-  background:#ffffff; border-top:1px solid var(--border);
-  padding:1rem 2rem; display:flex; justify-content:space-between;
-  align-items:center; font-size:0.72rem; color:var(--t3); margin-top:2rem;
+  margin: 2rem -1.5rem -2rem -1.5rem;
+  padding: 0.9rem 2rem;
+  background: #ffffff;
+  border-top: 1px solid #e4e9f2;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+  font-size: 10.5px; color: #64748b;
 }
-.pi-footer a { color:var(--t3); text-decoration:none; margin-left:1rem; }
-.pi-footer a:hover { color:var(--blue); }
+.pi-footer a { color: var(--t3); text-decoration: none; margin-left: 1rem; }
+.pi-footer a:hover { color: var(--blue); }
 
-/* page padding */
-.pi-page-body { padding: 0 1.5rem; }
+/* page padding (block-container now owns 1.5rem sides) */
+.pi-page-body { padding: 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -550,7 +595,7 @@ if st.session_state.selected_molecule:
             <div class="pi-mat-icon">🧪</div>
             <div>
               <div class="pi-mat-name">{selected_mol.upper()}</div>
-              <div style="margin-top:4px;">
+              <div class="pi-mat-chips">
                 <span class="pi-chip">📂 API</span>
                 <span class="pi-chip">CAS {cas_code[:22]}</span>
                 <span class="pi-chip">INR / {uom}</span>
@@ -562,7 +607,7 @@ if st.session_state.selected_molecule:
         """, unsafe_allow_html=True)
     with bann_r:
         st.markdown(
-            '<div class="pi-export-row" style="display:flex;gap:6px;justify-content:flex-end;margin-top:1rem;margin-right:1.5rem;">',
+            '<div class="pi-export-row" style="display:flex;gap:6px;justify-content:flex-end;margin-top:1rem;">',
             unsafe_allow_html=True,
         )
         if st.button("📥 PDF", key="pdf_export"):
@@ -1251,7 +1296,7 @@ else:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("""
-    <div class="pi-footer" style="margin-top:3rem;">
+    <div class="pi-footer">
       <div>
         <span style="font-size:1.2rem;margin-right:0.5rem;">💊</span>
         PharmaIntel | Price Benchmarking Intelligence Platform |
