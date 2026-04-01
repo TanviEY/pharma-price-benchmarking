@@ -50,14 +50,12 @@ def run_processing_pipeline(molecule_name, file_discovery):
         buyer_agg = DataProcessor.aggregate_buyer(molecule_df_filtered)
         cipla_agg = DataProcessor.aggregate_cipla(cipla_df, molecule_name)
 
-        # Standardise entity column name for consolidated view
-        supplier_agg['entity_name'] = supplier_agg['supplier']
-        buyer_agg['entity_name'] = buyer_agg['buyer']
-        cipla_agg['entity_name'] = cipla_agg['api']
-
         # Step 7: Build consolidated DataFrame
         shared_cols = ['entity_name', 'yyyymm', 'uom', 'GRADE_SPEC',
                        'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']
+        supplier_agg['entity_name'] = supplier_agg['supplier']
+        buyer_agg['entity_name'] = buyer_agg['buyer']
+        cipla_agg['entity_name'] = cipla_agg['api']
         consolidated = pd.concat(
             [supplier_agg[shared_cols], buyer_agg[shared_cols], cipla_agg[shared_cols]],
             ignore_index=True
