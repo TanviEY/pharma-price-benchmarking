@@ -22,306 +22,391 @@ def _safe_wtd_avg(total_value_series, qty_series) -> float:
     return total_value_series.sum() / total_qty
 
 
+def _fmt_period(yyyymm_str):
+    """Convert '202504' -> 'Apr 2025'"""
+    try:
+        return datetime.strptime(str(yyyymm_str), '%Y%m').strftime('%b %Y')
+    except Exception:
+        return str(yyyymm_str)
+
+
+ENTITY_COLOURS = [
+    '#0a2342',  # Cipla (navy - always first/special)
+    '#00b4d8',  # teal
+    '#e63946',  # red
+    '#2a9d8f',  # green
+    '#e9c46a',  # yellow
+    '#f4a261',  # orange
+    '#457b9d',  # steel blue
+    '#a8dadc',  # light teal
+    '#6d6875',  # purple
+    '#b5838d',  # rose
+    '#264653',  # dark teal
+    '#e76f51',  # coral
+]
+
+
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
 st.set_page_config(
-    page_title="Pharma Price Benchmarking",
+    page_title="PharmaIntel · Price Benchmarking",
     page_icon="💊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# ============================================================================
+# CSS
+# ============================================================================
 st.markdown("""
-    <style>
-    /* ── Global ── */
-    html, body, [data-testid="stAppViewContainer"] {
-        background-color: #f4f6fb;
-    }
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a3a5c 0%, #1f5080 100%);
-    }
-    [data-testid="stSidebar"] * {
-        color: #e8edf5 !important;
-    }
-    [data-testid="stSidebar"] .stButton > button {
-        background-color: #2e86c1;
-        color: #ffffff !important;
-        border: none;
-        border-radius: 6px;
-        width: 100%;
-        font-weight: 600;
-        transition: background 0.2s;
-    }
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background-color: #1a6fa8;
-    }
-    [data-testid="stSidebar"] input {
-        background-color: #254f73 !important;
-        color: #e8edf5 !important;
-        border: 1px solid #3a7ab5 !important;
-        border-radius: 6px !important;
-    }
+<style>
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #f0f4f8;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0a2342 0%, #0d2d52 100%);
+}
+[data-testid="stSidebar"] * { color: #d0dce8 !important; }
+[data-testid="stSidebar"] .stButton > button {
+    background-color: #1a4a7a;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 6px;
+    width: 100%;
+    font-weight: 600;
+    margin-bottom: 4px;
+    transition: background 0.2s;
+}
+[data-testid="stSidebar"] .stButton > button:hover { background-color: #0d3260; }
+[data-testid="stSidebar"] input {
+    background-color: #0d2d52 !important;
+    color: #d0dce8 !important;
+    border: 1px solid #1a4a7a !important;
+    border-radius: 6px !important;
+}
 
-    /* ── Top header banner ── */
-    .app-header {
-        background: linear-gradient(90deg, #1a3a5c 0%, #2e86c1 100%);
-        padding: 1.4rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .app-header h1 {
-        color: #ffffff;
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin: 0;
-        letter-spacing: 0.5px;
-    }
-    .app-header .subtitle {
-        color: #b3d1e8;
-        font-size: 0.85rem;
-        margin-top: 0.25rem;
-    }
-    .header-badge {
-        background: rgba(255,255,255,0.15);
-        color: #fff;
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
+.pi-header {
+    background: linear-gradient(90deg, #0a2342 0%, #0d3260 100%);
+    padding: 1.2rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 10px;
+    margin-bottom: 1.4rem;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+}
+.pi-brand {
+    color: #ffffff;
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    display: block;
+}
+.pi-subtitle {
+    color: #7fa8cc;
+    font-size: 0.78rem;
+    display: block;
+    margin-top: 2px;
+}
+.cipla-badge {
+    background: #e63946;
+    color: #fff;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-right: 8px;
+}
+.live-badge {
+    background: rgba(255,255,255,0.12);
+    color: #7fffad;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
 
-    /* ── KPI / metric cards ── */
-    .kpi-row {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-    }
-    .kpi-card {
-        background: #ffffff;
-        border-radius: 10px;
-        padding: 1.1rem 1.4rem;
-        flex: 1;
-        min-width: 140px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-        border-left: 4px solid #2e86c1;
-    }
-    .kpi-card .kpi-label {
-        font-size: 0.72rem;
-        color: #6b7a8d;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 0.3rem;
-    }
-    .kpi-card .kpi-value {
-        font-size: 1.45rem;
-        font-weight: 700;
-        color: #1a3a5c;
-    }
-    .kpi-card .kpi-delta {
-        font-size: 0.75rem;
-        color: #e74c3c;
-        margin-top: 0.2rem;
-    }
-    .kpi-card.accent { border-left-color: #27ae60; }
-    .kpi-card.warn   { border-left-color: #e67e22; }
-    .kpi-card.info   { border-left-color: #8e44ad; }
+.search-bar {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 1.1rem 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    margin-bottom: 1.4rem;
+}
 
-    /* ── Section header strip ── */
-    .section-header {
-        background: linear-gradient(90deg, #1a3a5c, #2e86c1);
-        color: #ffffff !important;
-        padding: 0.65rem 1.2rem;
-        border-radius: 8px;
-        font-size: 1.05rem;
-        font-weight: 700;
-        margin: 1.6rem 0 1rem 0;
-        letter-spacing: 0.3px;
-    }
+.mol-title-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 1.1rem 1.6rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    margin-bottom: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+}
+.mol-pill {
+    background: #0a2342;
+    color: #ffffff;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
 
-    /* ── Filter bar ── */
-    .filter-bar {
-        background: #ffffff;
-        border-radius: 10px;
-        padding: 1rem 1.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin-bottom: 1.5rem;
-    }
+.kpi-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    border-left: 4px solid #0a2342;
+    height: 100%;
+}
+.kpi-label {
+    font-size: 0.68rem;
+    color: #7a8a9a;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 0.35rem;
+}
+.kpi-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #0a2342;
+    line-height: 1.2;
+}
+.kpi-delta {
+    font-size: 0.72rem;
+    margin-top: 0.25rem;
+}
+.kpi-note {
+    font-size: 0.67rem;
+    color: #8a9aaa;
+    margin-top: 0.3rem;
+}
+.kpi-navy  { border-left-color: #0a2342; }
+.kpi-blue  { border-left-color: #00b4d8; }
+.kpi-green { border-left-color: #2a9d8f; }
+.kpi-red   { border-left-color: #e63946; }
+.kpi-orange{ border-left-color: #f4a261; }
 
-    /* ── Chart card ── */
-    .chart-card {
-        background: #ffffff;
-        border-radius: 10px;
-        padding: 1.2rem 1.4rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-        margin-bottom: 1.5rem;
-    }
+.section-title {
+    border-left: 4px solid #0a2342;
+    padding-left: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0a2342;
+    margin: 1.4rem 0 0.9rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
 
-    /* ── Table card ── */
-    .table-card {
-        background: #ffffff;
-        border-radius: 10px;
-        padding: 1.2rem 1.4rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-        margin-bottom: 1.5rem;
-    }
-    .table-card h4 {
-        color: #1a3a5c;
-        margin-bottom: 0.8rem;
-        font-size: 0.95rem;
-        font-weight: 700;
-        border-bottom: 2px solid #e8edf5;
-        padding-bottom: 0.4rem;
-    }
+.bench-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.bench-table th {
+    background: #0a2342;
+    color: #ffffff;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.bench-table td {
+    padding: 0.5rem 0.75rem;
+    color: #1a2a3a;
+    border-bottom: 1px solid #e8edf5;
+    white-space: nowrap;
+}
+.bench-table tr:nth-child(even) td { background-color: #f8f9fa; }
+.bench-table tr.cipla-row td { font-weight: 700; background: #eef3f9 !important; }
+.bench-table tr:hover td { background: #e8f0f8 !important; }
 
-    /* ── Cipla highlight card ── */
-    .cipla-highlight {
-        background: linear-gradient(135deg, #1a3a5c 0%, #2e86c1 100%);
-        color: #ffffff;
-        border-radius: 12px;
-        padding: 1.5rem 2rem;
-        text-align: center;
-        box-shadow: 0 4px 14px rgba(30,80,140,0.3);
-    }
-    .cipla-highlight .main-price {
-        font-size: 2.6rem;
-        font-weight: 800;
-        letter-spacing: -1px;
-        line-height: 1.1;
-    }
-    .cipla-highlight .price-label {
-        font-size: 0.85rem;
-        color: #b3d1e8;
-        margin-top: 0.3rem;
-    }
+.badge-benchmark  { background:#0a2342; color:#fff; padding:2px 10px; border-radius:12px; font-size:0.7rem; font-weight:700; }
+.badge-cheaper    { background:#2a9d8f; color:#fff; padding:2px 10px; border-radius:12px; font-size:0.7rem; font-weight:700; }
+.badge-slightlyhigher { background:#e9c46a; color:#333; padding:2px 10px; border-radius:12px; font-size:0.7rem; font-weight:700; }
+.badge-higher     { background:#f4a261; color:#fff; padding:2px 10px; border-radius:12px; font-size:0.7rem; font-weight:700; }
+.badge-premium    { background:#e63946; color:#fff; padding:2px 10px; border-radius:12px; font-size:0.7rem; font-weight:700; }
 
-    /* ── Landing page cards ── */
-    .welcome-card {
-        background: #ffffff;
-        border-radius: 12px;
-        padding: 2rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    }
-    .step-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.9rem;
-        margin-bottom: 0.9rem;
-    }
-    .step-num {
-        background: #2e86c1;
-        color: #fff;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 0.8rem;
-        flex-shrink: 0;
-    }
-    .step-text {
-        color: #333;
-        font-size: 0.92rem;
-        padding-top: 3px;
-    }
+.simple-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.simple-table th {
+    background: #eef3f9;
+    color: #0a2342;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid #c8d8e8;
+}
+.simple-table td {
+    padding: 0.45rem 0.75rem;
+    color: #1a2a3a;
+    border-bottom: 1px solid #e8edf5;
+}
+.simple-table tr:nth-child(even) td { background-color: #f8f9fa; }
+.simple-table tr.total-row td { font-weight: 700; background: #eef3f9 !important; border-top: 2px solid #c8d8e8; }
 
-    /* ── Divider ── */
-    hr { border: none; border-top: 1px solid #dde3ee; margin: 1rem 0; }
+.pi-footer {
+    background: #0a2342;
+    color: #7a9ab8;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    margin-top: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.73rem;
+}
+.pi-footer div:last-child { color: #aac4de; font-weight: 600; }
 
-    /* ── Streamlit default overrides ── */
-    [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
-    div[data-testid="stHorizontalBlock"] > div { gap: 0.6rem; }
-    </style>
+.card-wrap {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    margin-bottom: 1.4rem;
+}
+
+.outline-btn {
+    display: inline-block;
+    border: 1.5px solid #0a2342;
+    color: #0a2342;
+    padding: 0.3rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-right: 8px;
+    cursor: pointer;
+    text-decoration: none;
+}
+.outline-btn:hover { background: #eef3f9; }
+
+.analyze-btn > button {
+    background: #0d9488 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    width: 100% !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# SESSION STATE INITIALIZATION
+# SESSION STATE
 # ============================================================================
-if 'molecule_data' not in st.session_state:
-    st.session_state.molecule_data = None
-if 'selected_molecule' not in st.session_state:
-    st.session_state.selected_molecule = None
-if 'pipeline_metadata' not in st.session_state:
-    st.session_state.pipeline_metadata = None
+for _k, _v in [
+    ('molecule_data', None),
+    ('selected_molecule', None),
+    ('pipeline_metadata', None),
+]:
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
 # ============================================================================
-# INITIALIZE CLASSES
+# INIT CLASSES
 # ============================================================================
-
-file_discovery = FileDiscovery(
-    data_dir="data/raw",
-    molecule_mapping=MOLECULE_MAPPING
-)
-fuzzy_matcher = FuzzyMatcher(molecule_mapping=MOLECULE_MAPPING, threshold=70)
+file_discovery = FileDiscovery(data_dir="data/raw", molecule_mapping=MOLECULE_MAPPING)
+fuzzy_matcher  = FuzzyMatcher(molecule_mapping=MOLECULE_MAPPING, threshold=70)
 
 # ============================================================================
-# HEADER BANNER
+# HEADER
 # ============================================================================
-current_date = datetime.now().strftime("%d %b %Y")
-st.markdown(f"""
-<div class="app-header">
-  <div>
-    <h1>💊 Pharmaceutical Price Benchmarking</h1>
-    <div class="subtitle">Cipla Internal Procurement Intelligence Platform</div>
+st.markdown("""
+<div class="pi-header">
+  <div class="pi-header-left">
+    <span class="pi-brand">PharmaIntel · Price Benchmarking</span>
+    <span class="pi-subtitle">Internal EXIM Data Intelligence Platform</span>
   </div>
-  <div class="header-badge">📅 {current_date}</div>
+  <div class="pi-header-right">
+    <span class="cipla-badge">CIPLA INTERNAL</span>
+    <span class="live-badge">● Live Data</span>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# SIDEBAR - MOLECULE SELECTION
+# SIDEBAR
 # ============================================================================
-st.sidebar.markdown("## 🔍 Molecule Selection")
+st.sidebar.markdown("### 🔍 Molecule Search")
 
 available_molecules = file_discovery.get_available_molecules()
 
-# Search box with fuzzy matching
 search_input = st.sidebar.text_input(
     "Search molecule:",
     placeholder="e.g., azithromycoon, cipro...",
-    help="Supports fuzzy matching for typos and molecule aliases"
+    help="Supports fuzzy matching for typos and aliases",
 )
 
 matches = []
 if search_input.strip():
     matches = fuzzy_matcher.match_molecule_input(search_input)
 
-# Display search results
 if matches:
     st.sidebar.markdown("**🎯 Suggestions**")
     for mol_name, confidence in matches:
         if mol_name in available_molecules:
-            c1, c2 = st.sidebar.columns([3, 1])
-            with c1:
-                st.write(f"**{mol_name.upper()}**")
-            with c2:
-                st.caption(f"{confidence}%")
-            if st.sidebar.button(f"Select {mol_name.upper()}", key=f"btn_{mol_name}"):
+            st.sidebar.caption(f"{mol_name.upper()}  ·  {confidence}% match")
+            if st.sidebar.button(f"Select  {mol_name.upper()}", key=f"sb_btn_{mol_name}"):
                 st.session_state.selected_molecule = mol_name
                 st.rerun()
 elif search_input.strip():
     st.sidebar.warning("No matches found — try a different spelling.")
 
-# Display available molecules
 st.sidebar.markdown("---")
 st.sidebar.markdown("**📋 Available Molecules**")
-
 for mol_name, mol_info in available_molecules.items():
-    with st.sidebar.expander(f"✓ {mol_name.upper()}", expanded=False):
-        st.write(f"**Description:** {mol_info['description']}")
-        st.write(f"**Files:** {mol_info['file_count']}")
-        st.write(f"**Cipla Data:** {'✓ Yes' if mol_info['cipla_available'] else '✗ No'}")
-        if st.button("Load →", key=f"load_{mol_name}"):
-            st.session_state.selected_molecule = mol_name
-            st.rerun()
+    if st.sidebar.button(f"💊  {mol_name.upper()}", key=f"sb_mol_{mol_name}"):
+        st.session_state.selected_molecule = mol_name
+        st.rerun()
+
+if st.session_state.selected_molecule:
+    st.sidebar.markdown("---")
+    st.sidebar.success(f"✅ Loaded: **{st.session_state.selected_molecule.upper()}**")
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def _position_badge(vs_pct):
+    """Return HTML badge string for a vs-Cipla percentage."""
+    if vs_pct < -5:
+        return '<span class="badge-cheaper">Cheaper</span>'
+    elif vs_pct <= 5:
+        return '<span class="badge-slightlyhigher">Slightly Higher</span>'
+    elif vs_pct <= 20:
+        return '<span class="badge-higher">Higher</span>'
+    else:
+        return '<span class="badge-premium">Premium</span>'
+
+
+def _entity_colour_map(entity_list):
+    """Return dict mapping entity name -> colour, Cipla always navy."""
+    cmap = {}
+    palette_idx = 1  # index 0 is navy for Cipla
+    for ent in entity_list:
+        if ent not in cmap:
+            if ent.lower().startswith('cipla') or ent.lower() == 'cipla':
+                cmap[ent] = ENTITY_COLOURS[0]
+            else:
+                cmap[ent] = ENTITY_COLOURS[palette_idx % len(ENTITY_COLOURS)]
+                palette_idx += 1
+    return cmap
+
 
 # ============================================================================
 # MAIN CONTENT
@@ -330,402 +415,735 @@ for mol_name, mol_info in available_molecules.items():
 if st.session_state.selected_molecule:
     selected_mol = st.session_state.selected_molecule
 
-    st.sidebar.markdown("---")
-    st.sidebar.success(f"✅ Loaded: **{selected_mol.upper()}**")
-
-    # Load data
-    with st.spinner(f"Loading data for {selected_mol.upper()}..."):
+    with st.spinner(f"Loading data for {selected_mol.upper()}…"):
         result = run_processing_pipeline(selected_mol, file_discovery)
 
     if result['status'] == 'failed':
-        st.error(f"❌ Failed to load data: {', '.join(result['errors'])}")
+        st.error(f"❌ Pipeline failed: {', '.join(result['errors'])}")
         st.stop()
-
-    st.session_state.molecule_data = result
-    st.session_state.pipeline_metadata = result['metadata']
 
     metadata        = result['metadata']
     cipla_baseline  = metadata['cipla_baseline']
     filter_stats    = metadata['filter_stats']
     consolidated_df = result['data']['consolidated']
-    cipla_df_agg    = result['data']['cipla']
 
-    # ── Top KPI row ─────────────────────────────────────────────────────────
-    k1, k2, k3, k4, k5 = st.columns(5)
-    with k1:
-        st.metric("Files Loaded",     len(metadata['files_loaded']))
-    with k2:
-        st.metric("Raw Records",      f"{metadata['raw_record_count']:,}")
-    with k3:
-        st.metric("Filtered Records", f"{filter_stats['filtered_count']:,}",
-                  delta=f"-{filter_stats['removal_percentage']:.1f}%")
-    with k4:
-        st.metric("Cipla Avg Qty",    f"{cipla_baseline['avg_qty']:,.0f}")
-    with k5:
-        st.metric("Cipla Avg Price",  f"₹{cipla_baseline['avg_price']:,.2f}")
+    # Mol info
+    mol_cfg   = MOLECULE_MAPPING['molecules'].get(selected_mol, {})
+    cas_code  = mol_cfg.get('cipla_api_filter', selected_mol.upper())
+    mol_desc  = mol_cfg.get('description', '')
 
-    # ── Global filter bar ────────────────────────────────────────────────────
-    with st.container():
-        st.markdown('<div class="filter-bar">', unsafe_allow_html=True)
-        fc1, fc2, fc3, fc4 = st.columns(4)
-
-        unique_dates = sorted(consolidated_df['yyyymm'].unique())
-        with fc1:
-            date_range = st.multiselect("📅 Period (yyyymm)", unique_dates,
-                                        default=unique_dates, key="date_filter")
-        with fc2:
-            grade_specs    = sorted(consolidated_df['GRADE_SPEC'].unique())
-            selected_grades = st.multiselect("🏷️ Grade/Spec", grade_specs,
-                                             default=grade_specs, key="grade_filter")
-        with fc3:
-            uoms           = sorted(consolidated_df['uom'].unique())
-            selected_uoms  = st.multiselect("📐 UOM", uoms,
-                                            default=uoms, key="uom_filter")
-        with fc4:
-            sources        = sorted(consolidated_df['source'].unique())
-            selected_sources = st.multiselect("🏭 Source", sources,
-                                              default=sources, key="source_filter")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # Apply filters
-    filtered_df = consolidated_df[
-        (consolidated_df['yyyymm'].isin(date_range)) &
-        (consolidated_df['GRADE_SPEC'].isin(selected_grades)) &
-        (consolidated_df['uom'].isin(selected_uoms)) &
-        (consolidated_df['source'].isin(selected_sources))
-    ]
-
-    # ========================================================================
-    # SECTION 1 – Cipla Wtd Average Price
-    # ========================================================================
+    # ── Filter Bar ────────────────────────────────────────────────────────────
+    st.markdown('<div class="search-bar">', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-header">1. Cipla Wtd Average Price</div>',
-        unsafe_allow_html=True
+        "<p style='font-size:0.7rem;font-weight:700;color:#7a8a9a;"
+        "letter-spacing:1px;margin-bottom:0.6rem;'>MATERIAL INTELLIGENCE SEARCH</p>",
+        unsafe_allow_html=True,
     )
+    fb1, fb2, fb3, fb4 = st.columns([2, 2, 2, 1])
 
-    cipla_filtered = filtered_df[filtered_df['source'] == 'Cipla'].copy()
+    with fb1:
+        st.text_input("Molecule", value=selected_mol.upper(), disabled=True, key="fi_mol")
 
-    s1_left, s1_right = st.columns([1, 3])
+    period_opts = ["Last 3 Months", "Last 6 Months", "Last 12 Months", "All Time"]
+    with fb2:
+        period_sel = st.selectbox("Period", period_opts, index=1, key="fi_period")
 
-    with s1_left:
-        # Weighted average price across the selected period
-        if len(cipla_filtered) > 0:
-            wtd_avg = _safe_wtd_avg(cipla_filtered['Sum_of_TOTAL_VALUE'],
-                                    cipla_filtered['Sum_of_QTY'])
-            total_qty   = cipla_filtered['Sum_of_QTY'].sum()
-            total_value = cipla_filtered['Sum_of_TOTAL_VALUE'].sum()
+    source_opts = ["All", "Supplier", "Buyer"]
+    with fb3:
+        source_sel = st.selectbox("Origin / Source", source_opts, key="fi_source")
+
+    with fb4:
+        st.markdown('<div class="analyze-btn">', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        analyze = st.button("Analyze Now ▶", key="fi_analyze")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Apply period filter
+    all_periods = sorted(consolidated_df['yyyymm'].unique())
+    period_map  = {"Last 3 Months": 3, "Last 6 Months": 6, "Last 12 Months": 12}
+    if period_sel in period_map:
+        n = period_map[period_sel]
+        keep_periods = all_periods[-n:] if len(all_periods) >= n else all_periods
+    else:
+        keep_periods = all_periods
+
+    filtered_df = consolidated_df[consolidated_df['yyyymm'].isin(keep_periods)].copy()
+
+    # Apply source filter
+    if source_sel != "All":
+        filtered_df = filtered_df[
+            (filtered_df['source'] == source_sel) | (filtered_df['source'] == 'Cipla')
+        ]
+
+    max_period_str = _fmt_period(keep_periods[-1]) if keep_periods else "N/A"
+
+    # ── Molecule Title Card ───────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="mol-title-card">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span class="mol-pill">💊 {selected_mol.upper()}</span>
+        <span style="font-size:0.82rem;color:#4a5a6a;">API · {cas_code}</span>
+        <span style="font-size:0.82rem;color:#4a5a6a;">HS Code: —</span>
+        <span style="font-size:0.82rem;color:#4a5a6a;">Unit: INR/KG</span>
+        <span style="font-size:0.82rem;color:#4a5a6a;">Last Updated: {max_period_str}</span>
+      </div>
+      <div>
+        <span class="outline-btn">📄 Export PDF</span>
+        <span class="outline-btn">📊 Export Excel</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── KPI Computations ─────────────────────────────────────────────────────
+    cipla_rows   = filtered_df[filtered_df['source'] == 'Cipla']
+    market_rows  = filtered_df[filtered_df['source'] != 'Cipla']
+
+    cipla_price  = _safe_wtd_avg(cipla_rows['Sum_of_TOTAL_VALUE'], cipla_rows['Sum_of_QTY'])
+    market_price = _safe_wtd_avg(market_rows['Sum_of_TOTAL_VALUE'], market_rows['Sum_of_QTY'])
+    cipla_n      = len(cipla_rows)
+    market_n_ent = market_rows['entity_name'].nunique()
+
+    # Per-entity weighted avg for min/max
+    if len(market_rows) > 0:
+        ent_prices = (
+            market_rows.groupby('entity_name')
+            .apply(lambda g: _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']))
+            .reset_index(name='wtd_price')
+        )
+        ent_prices = ent_prices[ent_prices['wtd_price'] > 0]
+        if len(ent_prices) > 0:
+            min_row   = ent_prices.loc[ent_prices['wtd_price'].idxmin()]
+            max_row   = ent_prices.loc[ent_prices['wtd_price'].idxmax()]
+            low_price = min_row['wtd_price']
+            low_ent   = min_row['entity_name']
+            high_price= max_row['wtd_price']
+            high_ent  = max_row['entity_name']
         else:
-            wtd_avg     = cipla_baseline['avg_price']
-            total_qty   = cipla_baseline['avg_qty']
-            total_value = 0.0
+            low_price = high_price = 0.0
+            low_ent   = high_ent  = "—"
+    else:
+        low_price = high_price = 0.0
+        low_ent   = high_ent  = "—"
 
+    cost_adv     = cipla_price - market_price if market_price > 0 else 0.0
+    cost_adv_col = "#2a9d8f" if cost_adv <= 0 else "#e63946"
+
+    # Previous period delta
+    prev_cipla_price  = 0.0
+    prev_market_price = 0.0
+    if len(keep_periods) >= 2:
+        prev_period_list = keep_periods[:-1]
+        prev_df = consolidated_df[consolidated_df['yyyymm'].isin(prev_period_list)]
+        prev_c  = prev_df[prev_df['source'] == 'Cipla']
+        prev_m  = prev_df[prev_df['source'] != 'Cipla']
+        prev_cipla_price  = _safe_wtd_avg(prev_c['Sum_of_TOTAL_VALUE'], prev_c['Sum_of_QTY'])
+        prev_market_price = _safe_wtd_avg(prev_m['Sum_of_TOTAL_VALUE'], prev_m['Sum_of_QTY'])
+
+    def _delta_html(curr, prev):
+        if prev == 0:
+            return ""
+        diff = curr - prev
+        sign = "▲" if diff > 0 else "▼"
+        col  = "#e63946" if diff > 0 else "#2a9d8f"
+        return (
+            f'<div class="kpi-delta" style="color:{col};">'
+            f'{sign} ₹{abs(diff):,.0f} vs prev period</div>'
+        )
+
+    # ── 5 KPI Cards ───────────────────────────────────────────────────────────
+    k1, k2, k3, k4, k5 = st.columns(5)
+
+    with k1:
         st.markdown(f"""
-        <div class="cipla-highlight">
-          <div class="price-label">Weighted Average Price</div>
-          <div class="main-price">₹{wtd_avg:,.2f}</div>
-          <div class="price-label" style="margin-top:0.6rem;">per unit · {selected_mol.upper()}</div>
-          <hr style="border-color:rgba(255,255,255,0.25);margin:0.9rem 0;">
-          <div style="display:flex;justify-content:space-around;">
-            <div>
-              <div style="font-size:1rem;font-weight:700;">₹{total_value:,.0f}</div>
-              <div style="font-size:0.7rem;color:#b3d1e8;">Total Value (₹)</div>
-            </div>
-            <div>
-              <div style="font-size:1rem;font-weight:700;">{total_qty:,.0f}</div>
-              <div style="font-size:0.7rem;color:#b3d1e8;">Total Qty</div>
-            </div>
-          </div>
+        <div class="kpi-card kpi-navy">
+          <div class="kpi-label">Cipla WTD Avg Price</div>
+          <div class="kpi-value">₹{cipla_price:,.0f} <span style="font-size:0.75rem;font-weight:400;">/KG</span></div>
+          {_delta_html(cipla_price, prev_cipla_price)}
+          <div class="kpi-note">Weighted across {cipla_n} records</div>
         </div>
         """, unsafe_allow_html=True)
 
-    with s1_right:
-        cipla_trend = (
-            cipla_filtered.groupby('yyyymm')
-            .apply(lambda g: _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']))
-            .reset_index(name='Wtd_Avg_Price')
-        )
-        if len(cipla_trend) > 0:
-            fig_cipla = go.Figure()
-            fig_cipla.add_trace(go.Scatter(
-                x=cipla_trend['yyyymm'], y=cipla_trend['Wtd_Avg_Price'],
-                mode='lines+markers',
-                line=dict(color='#2e86c1', width=2.5),
-                marker=dict(size=7, color='#1a3a5c'),
-                fill='tozeroy', fillcolor='rgba(46,134,193,0.10)',
-                name='Cipla Wtd Avg Price'
-            ))
-            fig_cipla.update_layout(
-                title=None,
-                xaxis_title="Period",
-                yaxis_title="Wtd Avg Price (₹)",
-                height=240,
-                margin=dict(l=10, r=10, t=10, b=10),
-                paper_bgcolor='white', plot_bgcolor='#f9fbfe',
-                font=dict(size=11)
-            )
-            st.plotly_chart(fig_cipla, use_container_width=True)
-        else:
-            st.info("No Cipla data available for the selected filters.")
+    with k2:
+        st.markdown(f"""
+        <div class="kpi-card kpi-blue">
+          <div class="kpi-label">Market Avg (EXIM)</div>
+          <div class="kpi-value">₹{market_price:,.0f} <span style="font-size:0.75rem;font-weight:400;">/KG</span></div>
+          {_delta_html(market_price, prev_market_price)}
+          <div class="kpi-note">Across {market_n_ent} entities</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # Per-grade breakdown
-    if len(cipla_filtered) > 0:
-        grade_wtd = (
-            cipla_filtered.groupby('GRADE_SPEC')
+    cost_sign = "▼" if cost_adv < 0 else "▲"
+    with k3:
+        st.markdown(f"""
+        <div class="kpi-card kpi-green">
+          <div class="kpi-label">Cost Advantage</div>
+          <div class="kpi-value" style="color:{cost_adv_col};">{cost_sign} ₹{abs(cost_adv):,.0f}</div>
+          <div class="kpi-note">vs Market EXIM Average</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k4:
+        st.markdown(f"""
+        <div class="kpi-card kpi-red">
+          <div class="kpi-label">Lowest Competitor</div>
+          <div class="kpi-value">₹{low_price:,.0f} <span style="font-size:0.75rem;font-weight:400;">/KG</span></div>
+          <div class="kpi-note">{low_ent[:28] if low_ent else '—'}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k5:
+        st.markdown(f"""
+        <div class="kpi-card kpi-orange">
+          <div class="kpi-label">Highest Competitor</div>
+          <div class="kpi-value">₹{high_price:,.0f} <span style="font-size:0.75rem;font-weight:400;">/KG</span></div>
+          <div class="kpi-note">{high_ent[:28] if high_ent else '—'}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ========================================================================
+    # SECTION 2 – Competitor Benchmark Line Chart
+    # ========================================================================
+    st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">| Competitor Price Benchmark — Last 12 Months</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Build per-entity per-period WTD avg
+    chart_df = (
+        filtered_df.groupby(['yyyymm', 'entity_name'])
+        .apply(lambda g: _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']))
+        .reset_index(name='wtd_price')
+    )
+
+    # Market avg per period (non-Cipla)
+    mkt_per_period = (
+        filtered_df[filtered_df['source'] != 'Cipla']
+        .groupby('yyyymm')
+        .apply(lambda g: _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']))
+        .reset_index(name='wtd_price')
+    )
+    mkt_per_period['entity_name'] = 'Market Avg (EXIM)'
+
+    chart_all = pd.concat([chart_df, mkt_per_period], ignore_index=True)
+
+    all_entities = sorted(chart_df['entity_name'].unique().tolist())
+    cmap = _entity_colour_map(all_entities)
+    cmap['Market Avg (EXIM)'] = '#888888'
+
+    fig_bench = go.Figure()
+
+    for ent in all_entities:
+        sub = chart_df[chart_df['entity_name'] == ent].sort_values('yyyymm')
+        sub['period_label'] = sub['yyyymm'].apply(_fmt_period)
+        is_cipla = ent.lower().startswith('cipla') or ent.lower() == 'cipla'
+        colour   = cmap.get(ent, ENTITY_COLOURS[1])
+        fig_bench.add_trace(go.Scatter(
+            x=sub['period_label'],
+            y=sub['wtd_price'],
+            mode='lines+markers',
+            name=ent,
+            line=dict(
+                color=colour,
+                width=3 if is_cipla else 1.8,
+            ),
+            marker=dict(size=7 if is_cipla else 5, color=colour),
+        ))
+
+    if len(mkt_per_period) > 0:
+        mkt_sub = mkt_per_period.sort_values('yyyymm').copy()
+        mkt_sub['period_label'] = mkt_sub['yyyymm'].apply(_fmt_period)
+        fig_bench.add_trace(go.Scatter(
+            x=mkt_sub['period_label'],
+            y=mkt_sub['wtd_price'],
+            mode='lines',
+            name='Market Avg (EXIM)',
+            line=dict(color='#888888', width=2, dash='dash'),
+        ))
+
+    fig_bench.update_layout(
+        height=380,
+        paper_bgcolor='white',
+        plot_bgcolor='#f8fbff',
+        xaxis_title="Period",
+        yaxis_title="WTD Avg Price (₹/KG)",
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        margin=dict(l=10, r=10, t=30, b=10),
+        font=dict(size=11),
+    )
+    st.plotly_chart(fig_bench, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ========================================================================
+    # SECTION 3 – Bubble + Donut Row
+    # ========================================================================
+    bc_left, bc_right = st.columns(2)
+
+    # Per-entity aggregates for bubble
+    bubble_agg = (
+        filtered_df.groupby('entity_name')
+        .apply(lambda g: pd.Series({
+            'avg_price':  _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
+            'total_qty':  g['Sum_of_QTY'].sum(),
+            'shipments':  len(g),
+            'source':     g['source'].iloc[0],
+        }))
+        .reset_index()
+    )
+    bubble_agg = bubble_agg[bubble_agg['avg_price'] > 0]
+    bubble_agg['volume_mt'] = bubble_agg['total_qty'] / 1000.0
+
+    all_bubble_ents = sorted(bubble_agg['entity_name'].tolist())
+    b_cmap = _entity_colour_map(all_bubble_ents)
+
+    with bc_left:
+        st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">| Bubble Analysis · Price vs Volume vs Frequency</div>',
+            unsafe_allow_html=True,
+        )
+        fig_bub = go.Figure()
+        for ent in all_bubble_ents:
+            row = bubble_agg[bubble_agg['entity_name'] == ent]
+            if len(row) == 0:
+                continue
+            r = row.iloc[0]
+            fig_bub.add_trace(go.Scatter(
+                x=[r['avg_price']],
+                y=[r['volume_mt']],
+                mode='markers',
+                name=ent,
+                marker=dict(
+                    size=max(8, min(60, r['shipments'] * 5)),
+                    color=b_cmap.get(ent, ENTITY_COLOURS[1]),
+                    opacity=0.8,
+                    line=dict(width=1, color='white'),
+                ),
+                text=f"{ent}<br>Shipments: {int(r['shipments'])}",
+                hovertemplate="%{text}<br>Avg Price: ₹%{x:,.0f}<br>Volume: %{y:.1f} MT<extra></extra>",
+            ))
+        fig_bub.update_layout(
+            height=360,
+            xaxis_title="Avg Price (₹/KG)",
+            yaxis_title="Volume (MT)",
+            paper_bgcolor='white',
+            plot_bgcolor='#f8fbff',
+            legend=dict(orientation='v', x=1.02, y=1),
+            margin=dict(l=10, r=10, t=10, b=10),
+            font=dict(size=11),
+        )
+        st.plotly_chart(fig_bub, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with bc_right:
+        st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">| Volume Share by Competitor</div>',
+            unsafe_allow_html=True,
+        )
+        donut_labels = bubble_agg['entity_name'].tolist()
+        donut_values = bubble_agg['volume_mt'].tolist()
+        donut_colours = [b_cmap.get(e, ENTITY_COLOURS[1]) for e in donut_labels]
+
+        fig_donut = go.Figure(go.Pie(
+            labels=donut_labels,
+            values=donut_values,
+            hole=0.6,
+            marker=dict(colors=donut_colours),
+            textinfo='percent',
+            hovertemplate="%{label}<br>%{value:.1f} MT (%{percent})<extra></extra>",
+        ))
+        fig_donut.update_layout(
+            height=360,
+            paper_bgcolor='white',
+            legend=dict(orientation='v', x=1.02, y=1),
+            margin=dict(l=10, r=10, t=10, b=10),
+            font=dict(size=11),
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ========================================================================
+    # BENCHMARK TABLE
+    # ========================================================================
+    st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+    period_note = f"{_fmt_period(keep_periods[0])} – {_fmt_period(keep_periods[-1])}" if keep_periods else "All Time"
+    st.markdown(
+        f'<div class="section-title">| Competitor Benchmark Table'
+        f'<span style="font-size:0.72rem;font-weight:400;color:#7a8a9a;">'
+        f'  {period_note} · Source: {source_sel}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    bench_agg = (
+        filtered_df.groupby('entity_name')
+        .apply(lambda g: pd.Series({
+            'avg_price':  g['Avg_PRICE'].mean(),
+            'wtd_price':  _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
+            'total_qty':  g['Sum_of_QTY'].sum(),
+            'shipments':  len(g),
+            'source':     g['source'].iloc[0],
+        }))
+        .reset_index()
+    )
+
+    # Sort: Cipla first, rest by wtd_price ascending
+    cipla_mask = bench_agg['entity_name'].str.lower().str.startswith('cipla') | \
+                 (bench_agg['source'] == 'Cipla')
+    bench_cipla  = bench_agg[cipla_mask].copy()
+    bench_others = bench_agg[~cipla_mask].sort_values('wtd_price').copy()
+    bench_sorted = pd.concat([bench_cipla, bench_others], ignore_index=True)
+
+    cipla_ref_price = bench_cipla['wtd_price'].mean() if len(bench_cipla) > 0 else cipla_baseline['avg_price']
+
+    rows_html = ""
+    for i, row in bench_sorted.iterrows():
+        is_cipla_row = row['source'] == 'Cipla'
+        row_cls      = "cipla-row" if is_cipla_row else ""
+        if is_cipla_row:
+            num_str = ""
+        elif i in bench_others.index:
+            num_str = str(bench_others.index.get_loc(i) + 1)
+        else:
+            num_str = ""
+
+        vs_pct_val = ((row['wtd_price'] - cipla_ref_price) / cipla_ref_price * 100) if cipla_ref_price > 0 else 0.0
+
+        if is_cipla_row:
+            badge_html = '<span class="badge-benchmark">Benchmark</span>'
+            vs_str     = "—"
+        else:
+            badge_html = _position_badge(vs_pct_val)
+            sign_sym   = "▼" if vs_pct_val < 0 else "▲"
+            sign_col   = "#2a9d8f" if vs_pct_val < 0 else "#e63946"
+            vs_str     = (
+                f'<span style="color:{sign_col};font-weight:700;">'
+                f'{sign_sym} {abs(vs_pct_val):.1f}%</span>'
+            )
+
+        rows_html += f"""
+        <tr class="{row_cls}">
+          <td>{num_str}</td>
+          <td><strong>{row['entity_name']}</strong></td>
+          <td>{row['source']}</td>
+          <td>₹{row['avg_price']:,.0f}</td>
+          <td>₹{row['wtd_price']:,.0f}</td>
+          <td>{row['total_qty']/1000:.1f}</td>
+          <td>{int(row['shipments'])}</td>
+          <td>{vs_str}</td>
+          <td>{badge_html}</td>
+        </tr>
+        """
+
+    table_html = f"""
+    <table class="bench-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>COMPANY</th>
+          <th>ORIGIN</th>
+          <th>AVG PRICE (₹/KG)</th>
+          <th>WTD AVG PRICE</th>
+          <th>TOTAL VOLUME (MT)</th>
+          <th>NO. SHIPMENTS</th>
+          <th>VS CIPLA (%)</th>
+          <th>POSITION</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows_html}
+      </tbody>
+    </table>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ========================================================================
+    # SECTION 4 – Volume & Price Tables (side by side)
+    # ========================================================================
+    vt_left, vt_right = st.columns(2)
+
+    with vt_left:
+        st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">| Volume Data (MT)</div>',
+            unsafe_allow_html=True,
+        )
+
+        vol_rows = []
+        for per in keep_periods:
+            per_df   = filtered_df[filtered_df['yyyymm'] == per]
+            cip_vol  = per_df[per_df['source'] == 'Cipla']['Sum_of_QTY'].sum() / 1000
+            mkt_vol  = per_df[per_df['source'] != 'Cipla']['Sum_of_QTY'].sum() / 1000
+            total    = cip_vol + mkt_vol
+            share    = (cip_vol / total * 100) if total > 0 else 0.0
+            vol_rows.append({
+                'period':   per,
+                'cipla_mt': cip_vol,
+                'mkt_mt':   mkt_vol,
+                'share':    share,
+            })
+
+        vol_body = ""
+        for r in vol_rows:
+            vol_body += (
+                f"<tr><td>{_fmt_period(r['period'])}</td>"
+                f"<td>{r['cipla_mt']:.1f}</td>"
+                f"<td>{r['mkt_mt']:.1f}</td>"
+                f"<td>{r['share']:.1f}%</td></tr>"
+            )
+        # Totals
+        t_cip = sum(r['cipla_mt'] for r in vol_rows)
+        t_mkt = sum(r['mkt_mt']   for r in vol_rows)
+        t_tot = t_cip + t_mkt
+        t_shr = (t_cip / t_tot * 100) if t_tot > 0 else 0.0
+        vol_html = f"""
+        <table class="simple-table">
+          <thead>
+            <tr><th>MONTH</th><th>CIPLA (MT)</th><th>MARKET (MT)</th><th>CIPLA SHARE (%)</th></tr>
+          </thead>
+          <tbody>
+            {vol_body}
+            <tr class="total-row">
+              <td>TOTAL</td>
+              <td>{t_cip:.1f}</td>
+              <td>{t_mkt:.1f}</td>
+              <td>{t_shr:.1f}%</td>
+            </tr>
+          </tbody>
+        </table>
+        """
+        st.markdown(vol_html, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with vt_right:
+        st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">| Price Trend (₹/KG)</div>',
+            unsafe_allow_html=True,
+        )
+
+        price_rows = []
+        for per in keep_periods:
+            per_df    = filtered_df[filtered_df['yyyymm'] == per]
+            cip_pr    = _safe_wtd_avg(
+                per_df[per_df['source'] == 'Cipla']['Sum_of_TOTAL_VALUE'],
+                per_df[per_df['source'] == 'Cipla']['Sum_of_QTY'],
+            )
+            mkt_pr    = _safe_wtd_avg(
+                per_df[per_df['source'] != 'Cipla']['Sum_of_TOTAL_VALUE'],
+                per_df[per_df['source'] != 'Cipla']['Sum_of_QTY'],
+            )
+            spread    = cip_pr - mkt_pr
+            price_rows.append({'period': per, 'cipla': cip_pr, 'mkt': mkt_pr, 'spread': spread})
+
+        price_body = ""
+        for r in price_rows:
+            sprd_col  = "#2a9d8f" if r['spread'] < 0 else "#e63946"
+            sprd_sign = "▼" if r['spread'] < 0 else "▲"
+            price_body += (
+                f"<tr><td>{_fmt_period(r['period'])}</td>"
+                f"<td>₹{r['cipla']:,.0f}</td>"
+                f"<td>₹{r['mkt']:,.0f}</td>"
+                f"<td style='color:{sprd_col};font-weight:700;'>"
+                f"{sprd_sign} ₹{abs(r['spread']):,.0f}</td></tr>"
+            )
+        # WTD Avg footer
+        all_cip  = filtered_df[filtered_df['source'] == 'Cipla']
+        all_mkt  = filtered_df[filtered_df['source'] != 'Cipla']
+        wtd_cip  = _safe_wtd_avg(all_cip['Sum_of_TOTAL_VALUE'], all_cip['Sum_of_QTY'])
+        wtd_mkt  = _safe_wtd_avg(all_mkt['Sum_of_TOTAL_VALUE'], all_mkt['Sum_of_QTY'])
+        wtd_sprd = wtd_cip - wtd_mkt
+        sprd_col = "#2a9d8f" if wtd_sprd < 0 else "#e63946"
+        sprd_sym = "▼" if wtd_sprd < 0 else "▲"
+
+        price_html = f"""
+        <table class="simple-table">
+          <thead>
+            <tr><th>MONTH</th><th>CIPLA AVG</th><th>MARKET AVG</th><th>SPREAD</th></tr>
+          </thead>
+          <tbody>
+            {price_body}
+            <tr class="total-row">
+              <td>WTD AVG</td>
+              <td>₹{wtd_cip:,.0f}</td>
+              <td>₹{wtd_mkt:,.0f}</td>
+              <td style='color:{sprd_col};font-weight:700;'>{sprd_sym} ₹{abs(wtd_sprd):,.0f}</td>
+            </tr>
+          </tbody>
+        </table>
+        """
+        st.markdown(price_html, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ========================================================================
+    # SECTION 5 – Exact Grade Match
+    # ========================================================================
+    st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">5. Exact Grade Match</div>',
+        unsafe_allow_html=True,
+    )
+
+    cipla_grade_rows = filtered_df[filtered_df['source'] == 'Cipla']
+    if len(cipla_grade_rows) > 0:
+        cipla_primary_grade = (
+            cipla_grade_rows['GRADE_SPEC']
+            .value_counts()
+            .idxmax()
+        )
+        grade_filtered_df = filtered_df[filtered_df['GRADE_SPEC'] == cipla_primary_grade]
+
+        st.info(
+            f"Showing only transactions matching Cipla's primary grade: **{cipla_primary_grade}**"
+        )
+
+        grade_bench = (
+            grade_filtered_df.groupby('entity_name')
             .apply(lambda g: pd.Series({
-                'Wtd Avg Price (₹)': _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
-                'Total Qty':         g['Sum_of_QTY'].sum(),
-                'Total Value (₹)':   g['Sum_of_TOTAL_VALUE'].sum()
+                'avg_price': g['Avg_PRICE'].mean(),
+                'wtd_price': _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
+                'total_qty': g['Sum_of_QTY'].sum(),
+                'shipments': len(g),
+                'source':    g['source'].iloc[0],
             }))
             .reset_index()
         )
-        grade_wtd['Wtd Avg Price (₹)'] = grade_wtd['Wtd Avg Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-        grade_wtd['Total Value (₹)']   = grade_wtd['Total Value (₹)'].apply(lambda x: f"₹{x:,.2f}")
-        grade_wtd['Total Qty']         = grade_wtd['Total Qty'].apply(lambda x: f"{x:,.0f}")
-        st.caption("Cipla Wtd Avg Price by Grade/Spec")
-        st.dataframe(grade_wtd, use_container_width=True, hide_index=True)
+
+        g_cipla_mask  = grade_bench['source'] == 'Cipla'
+        g_bench_cipla = grade_bench[g_cipla_mask].copy()
+        g_bench_other = grade_bench[~g_cipla_mask].sort_values('wtd_price').copy()
+        g_bench_sort  = pd.concat([g_bench_cipla, g_bench_other], ignore_index=True)
+        g_cipla_price = g_bench_cipla['wtd_price'].mean() if len(g_bench_cipla) > 0 else cipla_ref_price
+
+        g_rows_html = ""
+        for i, row in g_bench_sort.iterrows():
+            is_c      = row['source'] == 'Cipla'
+            row_cls   = "cipla-row" if is_c else ""
+            if is_c:
+                num_str = ""
+            elif i in g_bench_other.index:
+                num_str = str(int(g_bench_other.index.tolist().index(i)) + 1)
+            else:
+                num_str = ""
+            vs_pct_v  = ((row['wtd_price'] - g_cipla_price) / g_cipla_price * 100) if g_cipla_price > 0 else 0.0
+            if is_c:
+                badge_h = '<span class="badge-benchmark">Benchmark</span>'
+                vs_s    = "—"
+            else:
+                badge_h = _position_badge(vs_pct_v)
+                s_sym   = "▼" if vs_pct_v < 0 else "▲"
+                s_col   = "#2a9d8f" if vs_pct_v < 0 else "#e63946"
+                vs_s    = (
+                    f'<span style="color:{s_col};font-weight:700;">'
+                    f'{s_sym} {abs(vs_pct_v):.1f}%</span>'
+                )
+            g_rows_html += f"""
+            <tr class="{row_cls}">
+              <td>{num_str}</td>
+              <td><strong>{row['entity_name']}</strong></td>
+              <td>{row['source']}</td>
+              <td>₹{row['avg_price']:,.0f}</td>
+              <td>₹{row['wtd_price']:,.0f}</td>
+              <td>{row['total_qty']/1000:.1f}</td>
+              <td>{int(row['shipments'])}</td>
+              <td>{vs_s}</td>
+              <td>{badge_h}</td>
+            </tr>
+            """
+
+        g_table_html = f"""
+        <table class="bench-table">
+          <thead>
+            <tr>
+              <th>#</th><th>COMPANY</th><th>ORIGIN</th>
+              <th>AVG PRICE (₹/KG)</th><th>WTD AVG PRICE</th>
+              <th>TOTAL VOLUME (MT)</th><th>NO. SHIPMENTS</th>
+              <th>VS CIPLA (%)</th><th>POSITION</th>
+            </tr>
+          </thead>
+          <tbody>{g_rows_html}</tbody>
+        </table>
+        """
+        st.markdown(g_table_html, unsafe_allow_html=True)
+    else:
+        st.info("No Cipla rows in the filtered data — cannot determine primary grade.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # ========================================================================
-    # SECTION 2 – Comparison with Benchmarks of Competitors
+    # FOOTER
     # ========================================================================
-    st.markdown(
-        '<div class="section-header">2. Comparison with Benchmarks of Competitors for Select Period</div>',
-        unsafe_allow_html=True
-    )
-
-    # Weighted avg price per source per period
-    bench_data = (
-        filtered_df.groupby(['yyyymm', 'source'])
-        .apply(lambda g: pd.Series({
-            'Wtd_Avg_Price': _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
-            'Total_Qty':     g['Sum_of_QTY'].sum()
-        }))
-        .reset_index()
-    )
-
-    colour_map = {'Cipla': '#1a3a5c', 'Supplier': '#2e86c1', 'Buyer': '#27ae60'}
-
-    b_left, b_right = st.columns(2)
-
-    with b_left:
-        fig_bar = px.bar(
-            bench_data,
-            x='yyyymm', y='Wtd_Avg_Price', color='source',
-            barmode='group',
-            color_discrete_map=colour_map,
-            labels={'Wtd_Avg_Price': 'Wtd Avg Price (₹)', 'yyyymm': 'Period', 'source': 'Source'},
-            height=360
-        )
-        fig_bar.update_layout(
-            title=None, legend_title_text='Source',
-            paper_bgcolor='white', plot_bgcolor='#f9fbfe',
-            font=dict(size=11), margin=dict(l=10, r=10, t=10, b=10)
-        )
-        st.caption("Grouped bar – Wtd Avg Price by Period & Source")
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    with b_right:
-        fig_line = px.line(
-            bench_data,
-            x='yyyymm', y='Wtd_Avg_Price', color='source',
-            markers=True,
-            color_discrete_map=colour_map,
-            labels={'Wtd_Avg_Price': 'Wtd Avg Price (₹)', 'yyyymm': 'Period', 'source': 'Source'},
-            height=360
-        )
-        fig_line.update_layout(
-            title=None, legend_title_text='Source',
-            paper_bgcolor='white', plot_bgcolor='#f9fbfe',
-            font=dict(size=11), margin=dict(l=10, r=10, t=10, b=10)
-        )
-        st.caption("Trend line – Price movement over time")
-        st.plotly_chart(fig_line, use_container_width=True)
-
-    # Summary comparison table
-    bench_summary = (
-        filtered_df.groupby('source')
-        .apply(lambda g: pd.Series({
-            'Wtd Avg Price (₹)': _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
-            'Total Qty':         g['Sum_of_QTY'].sum(),
-            'Total Value (₹)':   g['Sum_of_TOTAL_VALUE'].sum(),
-            'No. of Records':    len(g)
-        }))
-        .reset_index()
-    )
-    # Variance vs Cipla
-    cipla_ref = bench_summary.loc[bench_summary['source'] == 'Cipla', 'Wtd Avg Price (₹)']
-    cipla_ref_val = cipla_ref.values[0] if len(cipla_ref) > 0 else cipla_baseline['avg_price']
-    bench_summary['vs Cipla (%)'] = bench_summary['Wtd Avg Price (₹)'].apply(
-        lambda p: (f"{(p - cipla_ref_val) / cipla_ref_val * 100:+.2f}%"
-                   if cipla_ref_val != 0 else "N/A")
-    )
-    bench_summary['Wtd Avg Price (₹)'] = bench_summary['Wtd Avg Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-    bench_summary['Total Value (₹)']   = bench_summary['Total Value (₹)'].apply(lambda x: f"₹{x:,.2f}")
-    bench_summary['Total Qty']         = bench_summary['Total Qty'].apply(lambda x: f"{x:,.0f}")
-
-    st.dataframe(bench_summary, use_container_width=True, hide_index=True)
-
-    # ========================================================================
-    # SECTION 3 – Typical Bubble Chart Analysis
-    # ========================================================================
-    st.markdown(
-        '<div class="section-header">3. Typical Bubble Chart Analysis</div>',
-        unsafe_allow_html=True
-    )
-
-    bubble_data = (
-        filtered_df.groupby(['yyyymm', 'source', 'GRADE_SPEC'])
-        .apply(lambda g: pd.Series({
-            'Wtd_Avg_Price': _safe_wtd_avg(g['Sum_of_TOTAL_VALUE'], g['Sum_of_QTY']),
-            'Total_Qty':     g['Sum_of_QTY'].sum()
-        }))
-        .reset_index()
-    )
-
-    fig_bubble = px.scatter(
-        bubble_data,
-        x='Total_Qty', y='Wtd_Avg_Price',
-        color='source', size='Total_Qty',
-        symbol='GRADE_SPEC',
-        hover_data=['yyyymm', 'GRADE_SPEC'],
-        color_discrete_map=colour_map,
-        labels={
-            'Total_Qty':     'Total Volume (Qty)',
-            'Wtd_Avg_Price': 'Wtd Avg Price (₹)',
-            'source':        'Source',
-            'GRADE_SPEC':    'Grade/Spec'
-        },
-        size_max=60,
-        height=480
-    )
-    # Cipla baseline line
-    fig_bubble.add_hline(
-        y=cipla_baseline['avg_price'],
-        line_dash='dash', line_color='#e74c3c',
-        annotation_text=f"Cipla Baseline ₹{cipla_baseline['avg_price']:,.2f}",
-        annotation_position='top right'
-    )
-    fig_bubble.update_layout(
-        title=None,
-        paper_bgcolor='white', plot_bgcolor='#f9fbfe',
-        font=dict(size=11),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(l=10, r=10, t=30, b=10)
-    )
-    st.plotly_chart(fig_bubble, use_container_width=True)
-    st.caption(
-        "Bubble size = purchase volume. "
-        "Red dashed line = Cipla baseline price. "
-        "Shape = Grade/Spec."
-    )
-
-    # ========================================================================
-    # SECTION 4 – Volume and Price Data Tables
-    # ========================================================================
-    st.markdown(
-        '<div class="section-header">4. Volume and Price Data Tables</div>',
-        unsafe_allow_html=True
-    )
-
-    tab_supplier, tab_buyer, tab_cipla, tab_all = st.tabs([
-        "🏭 Supplier", "🛒 Buyer", "🏢 Cipla", "📋 All Data"
-    ])
-
-    def _fmt_table(df_src):
-        """Return a display-ready copy of a source-filtered DataFrame."""
-        out = df_src[[
-            'yyyymm', 'entity_name', 'uom', 'GRADE_SPEC',
-            'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE'
-        ]].copy()
-        out.columns = ['Period', 'Entity', 'UOM', 'Grade/Spec',
-                       'Volume (Qty)', 'Total Value (₹)', 'Avg Price (₹)']
-        out['Volume (Qty)']   = out['Volume (Qty)'].apply(lambda x: f"{x:,.0f}")
-        out['Total Value (₹)'] = out['Total Value (₹)'].apply(lambda x: f"₹{x:,.2f}")
-        out['Avg Price (₹)']  = out['Avg Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-        return out.sort_values('Period', ascending=False)
-
-    with tab_supplier:
-        sup_df = _fmt_table(filtered_df[filtered_df['source'] == 'Supplier'])
-        st.dataframe(sup_df, use_container_width=True, hide_index=True)
-        csv = sup_df.to_csv(index=False)
-        st.download_button("📥 Download Supplier Data", csv,
-                           f"{selected_mol}_supplier.csv", "text/csv",
-                           key="dl_supplier")
-
-    with tab_buyer:
-        buy_df = _fmt_table(filtered_df[filtered_df['source'] == 'Buyer'])
-        st.dataframe(buy_df, use_container_width=True, hide_index=True)
-        csv = buy_df.to_csv(index=False)
-        st.download_button("📥 Download Buyer Data", csv,
-                           f"{selected_mol}_buyer.csv", "text/csv",
-                           key="dl_buyer")
-
-    with tab_cipla:
-        cip_df = _fmt_table(filtered_df[filtered_df['source'] == 'Cipla'])
-        st.dataframe(cip_df, use_container_width=True, hide_index=True)
-        csv = cip_df.to_csv(index=False)
-        st.download_button("📥 Download Cipla Data", csv,
-                           f"{selected_mol}_cipla.csv", "text/csv",
-                           key="dl_cipla")
-
-    with tab_all:
-        all_df = _fmt_table(filtered_df)
-        st.dataframe(all_df, use_container_width=True, hide_index=True)
-        csv = all_df.to_csv(index=False)
-        st.download_button("📥 Download All Data", csv,
-                           f"{selected_mol}_all.csv", "text/csv",
-                           key="dl_all")
+    st.markdown("""
+    <div class="pi-footer">
+      <div>PharmaIntel | Price Benchmarking Intelligence Platform |
+           Data Sources: Internal ERP EXIM Trade Data |
+           Confidential — For Internal Use Only</div>
+      <div>© 2026 Cipla Ltd</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ============================================================================
 # LANDING PAGE (no molecule selected)
 # ============================================================================
 else:
     st.markdown("""
-    <div class="welcome-card">
-      <h2 style="color:#1a3a5c;margin-top:0;">👋 Welcome to the Price Benchmarking Dashboard</h2>
-      <p style="color:#555;font-size:0.95rem;">
+    <div class="card-wrap">
+      <h2 style="color:#0a2342;margin-top:0;">👋 Welcome to PharmaIntel · Price Benchmarking</h2>
+      <p style="color:#4a5a6a;font-size:0.95rem;">
         Select a molecule from the sidebar to explore Cipla's procurement intelligence across
         <strong>Suppliers</strong>, <strong>Buyers</strong>, and <strong>Cipla's own GRN data</strong>.
       </p>
-      <hr>
-      <p style="color:#1a3a5c;font-weight:700;margin-bottom:0.5rem;">The dashboard provides:</p>
+      <hr style="border-top:1px solid #dde3ee;">
+      <p style="color:#0a2342;font-weight:700;margin-bottom:0.5rem;">This dashboard delivers:</p>
+      <ul style="color:#4a5a6a;font-size:0.9rem;line-height:1.9;">
+        <li>KPI summary — Cipla WTD avg price vs market average, cost advantage, min/max competitors</li>
+        <li>Competitor benchmark line chart — entity-level price trends over time</li>
+        <li>Bubble analysis — price vs volume vs shipment frequency</li>
+        <li>Volume share donut — who controls the market volume</li>
+        <li>Styled benchmark table — rank-ordered with vs-Cipla % and position badges</li>
+        <li>Volume & price monthly tables — period-by-period breakdown</li>
+        <li>Exact grade match — filtered to Cipla's primary GRADE_SPEC</li>
+      </ul>
+    </div>
     """, unsafe_allow_html=True)
 
-    steps = [
-        ("1", "Cipla wtd average price — see Cipla's weighted average procurement price with a trend chart."),
-        ("2", "Comparison with benchmarks of competitors for select period — grouped bar & line chart vs Supplier and Buyer."),
-        ("3", "Typical bubble chart analysis — volume vs price bubbles with the Cipla baseline reference line."),
-        ("4", "Volume and price data tables — detailed per-source tables with CSV download."),
-    ]
-    for num, text in steps:
-        st.markdown(f"""
-        <div class="step-item">
-          <div class="step-num">{num}</div>
-          <div class="step-text">{text}</div>
-        </div>
-        """, unsafe_allow_html=True)
+    available_molecules = file_discovery.get_available_molecules()
+    if available_molecules:
+        st.markdown(
+            '<div class="section-title" style="margin-top:1.5rem;">| Available Molecules</div>',
+            unsafe_allow_html=True,
+        )
+        mol_cols = st.columns(min(len(available_molecules), 4))
+        for idx, (mol_name, mol_info) in enumerate(available_molecules.items()):
+            with mol_cols[idx % 4]:
+                st.markdown(f"""
+                <div class="kpi-card kpi-navy" style="text-align:center;padding:1.2rem;margin-bottom:8px;">
+                  <div class="kpi-label">Molecule</div>
+                  <div class="kpi-value" style="font-size:1rem;">{mol_name.upper()}</div>
+                  <div style="font-size:0.7rem;color:#7a8a9a;margin-top:0.3rem;">{mol_info.get('description','')}</div>
+                  <div style="font-size:0.7rem;color:#9aabb8;margin-top:0.2rem;">
+                    {mol_info.get('file_count',0)} file(s) &nbsp;|&nbsp;
+                    {'✓ Cipla data' if mol_info.get('cipla_available') else '✗ No Cipla'}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"Load {mol_name.upper()} →", key=f"land_{mol_name}"):
+                    st.session_state.selected_molecule = mol_name
+                    st.rerun()
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Molecule cards
-    st.markdown(
-        '<div class="section-header">Available Molecules</div>',
-        unsafe_allow_html=True
-    )
-    mol_cols = st.columns(min(len(available_molecules), 4))
-    for idx, (mol_name, mol_info) in enumerate(available_molecules.items()):
-        with mol_cols[idx % 4]:
-            st.markdown(f"""
-            <div class="kpi-card accent" style="text-align:center;padding:1.2rem;">
-              <div class="kpi-label">Molecule</div>
-              <div class="kpi-value" style="font-size:1.1rem;">{mol_name.upper()}</div>
-              <div style="font-size:0.72rem;color:#666;margin-top:0.3rem;">{mol_info['description']}</div>
-              <div style="font-size:0.72rem;color:#888;margin-top:0.2rem;">
-                {mol_info['file_count']} file(s) &nbsp;|&nbsp;
-                {'✓ Cipla' if mol_info['cipla_available'] else '✗ No Cipla'}
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button(f"Load {mol_name.upper()}", key=f"land_{mol_name}"):
-                st.session_state.selected_molecule = mol_name
-                st.rerun()
+    st.markdown("""
+    <div class="pi-footer" style="margin-top:2rem;">
+      <div>PharmaIntel | Price Benchmarking Intelligence Platform |
+           Data Sources: Internal ERP EXIM Trade Data |
+           Confidential — For Internal Use Only</div>
+      <div>© 2026 Cipla Ltd</div>
+    </div>
+    """, unsafe_allow_html=True)
