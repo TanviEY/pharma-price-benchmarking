@@ -52,9 +52,11 @@ class FileDiscovery:
         """Get all available molecules with their file count"""
         available = {}
         
-        for mol_name, mol_config in self.molecule_mapping.items():
-            pattern = mol_config.get("file_pattern", f"*{mol_name}*")
-            files = list(self.data_dir.rglob(pattern))
+        for mol_name, mol_config in self.molecule_mapping['molecules'].items():
+            patterns = mol_config.get("file_patterns", [f"*{mol_name}*"])
+            files = []
+            for pattern in patterns:
+                files.extend(list(self.data_dir.rglob(pattern)))
 
             if files:
                 available[mol_name] = {
