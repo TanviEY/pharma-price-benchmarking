@@ -145,7 +145,6 @@ header {visibility: hidden;}
   max-width: 100% !important;
 }
 [data-testid="stAppViewContainer"] { background: var(--bg); }
-[data-testid="stVerticalBlock"] { gap: 0 !important; }
 div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 
 /* ── NAV BAR ── */
@@ -204,7 +203,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
   padding: 1rem 1.5rem 0.5rem 1.5rem;
-  margin: -1rem 1.5rem 0.5rem 1.5rem;
+  margin: 1.5rem 1.5rem 1rem 1.5rem;
   position: relative;
   z-index: 10;
 }
@@ -327,7 +326,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 }
 .pi-bar-fill {
   height:100%; border-radius:4px; display:flex; align-items:center;
-  padding-left:8px; font-size:0.75rem; font-weight:600;
+  font-size:0.75rem; font-weight:600;
   color:#fff; white-space:nowrap; min-width:40px;
 }
 .pi-bar-price { width:88px; font-size:0.8rem; font-weight:600; color:var(--t1); text-align:right; flex-shrink:0; }
@@ -424,8 +423,7 @@ st.markdown("""
   </div>
   <div class="pi-nav-right">
     <span class="pi-pill-live">● Live</span>
-    <span class="pi-pill-cipla">🔒 Cipla Internal</span>
-    <span class="pi-pill-fy">📅 FY 2025–26</span>
+    <span class="pi-pill-cipla">Cipla Internal</span>
     <span class="pi-avatar">CI</span>
   </div>
 </div>
@@ -441,13 +439,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Search card (overlaps hero bottom via negative margin CSS)
+# Search card (placed below the hero with a clean positive margin)
 with st.container():
     st.markdown('<div class="pi-search-wrap">', unsafe_allow_html=True)
-    sc1, sc2, sc3, sc4 = st.columns([3, 2, 2, 1])
+    sc1, sc2, sc3, sc4 = st.columns([4, 2, 2, 2])
     with sc1:
         hero_mol_input = st.text_input(
-            "🔬 Molecule",
+            "Molecule",
             value=st.session_state.selected_molecule or "",
             placeholder="e.g., Azithromycin…",
             key="hero_mol_input",
@@ -456,34 +454,21 @@ with st.container():
         period_keys = list(PERIOD_OPTIONS.keys())
         default_idx = period_keys.index(st.session_state.selected_period) if st.session_state.selected_period in period_keys else 0
         hero_period = st.selectbox(
-            "📅 Period",
+            "Period",
             period_keys,
             index=default_idx,
             key="hero_period_sel",
         )
     with sc3:
         hero_origin = st.selectbox(
-            "🌍 Origin",
+            "Origin",
             ["All Origins", "India", "China", "EU / US"],
             key="hero_origin_sel",
         )
     with sc4:
         st.markdown('<div class="pi-analyse-btn">', unsafe_allow_html=True)
-        analyse_clicked = st.button("⚡ Analyse", key="hero_analyse_btn")
+        analyse_clicked = st.button("Analyse", key="hero_analyse_btn")
         st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# Recent-tag pills row (inside gradient area, below search card)
-if available_molecules:
-    st.markdown('<div class="pi-tag-row">', unsafe_allow_html=True)
-    tag_cols = st.columns(len(available_molecules))
-    for i, mol_name in enumerate(available_molecules.keys()):
-        with tag_cols[i]:
-            if st.button(f"🔬 {mol_name.upper()}", key=f"tag_{mol_name}"):
-                st.session_state.selected_molecule = mol_name
-                st.session_state.selected_period = hero_period
-                st.session_state.pipeline_result = None
-                st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Handle Analyse click
@@ -551,7 +536,7 @@ if st.session_state.selected_molecule:
             <div>
               <div class="pi-mat-name">{selected_mol.upper()}</div>
               <div style="margin-top:4px;">
-                <span class="pi-chip">📂 API</span>
+                <span class="pi-chip">API</span>
                 <span class="pi-chip">CAS {cas_code[:22]}</span>
                 <span class="pi-chip">INR / {uom}</span>
                 <span class="pi-chip">{period_label}</span>
@@ -565,10 +550,8 @@ if st.session_state.selected_molecule:
             '<div class="pi-export-row" style="display:flex;gap:6px;justify-content:flex-end;margin-top:1rem;margin-right:1.5rem;">',
             unsafe_allow_html=True,
         )
-        if st.button("📥 PDF", key="pdf_export"):
-            st.toast("PDF export coming soon")
         st.download_button(
-            label="📊 Excel",
+            label="Export CSV",
             data=export_csv,
             file_name=f"{selected_mol}_{selected_period.replace(' ', '_').replace('–', '-')}.csv",
             mime="text/csv",
@@ -742,7 +725,6 @@ if st.session_state.selected_molecule:
         # Build HTML bar chart
         bar_html = f"""
         <div class="pi-card" style="margin-bottom:1.5rem;">
-          <div class="pi-section-hdr">Section 2</div>
           <div class="pi-section-title">WTD Average Price Comparison (₹/{uom})</div>
           <div class="pi-section-sub">Cipla vs competitors · EXIM trade data · {period_label}</div>
           <div style="padding:0.2rem 0;">
@@ -776,7 +758,7 @@ if st.session_state.selected_molecule:
             <div class="pi-bar-row">
               <div class="pi-bar-label {lbl_cls}">{ent_display[:30]}</div>
               <div class="pi-bar-track">
-                <div class="pi-bar-fill" style="{fill}">₹{price_val:,.0f}</div>
+                <div class="pi-bar-fill" style="{fill}"></div>
               </div>
               <div class="pi-bar-price">₹{price_val:,.0f}</div>
               <div class="pi-bar-badge">{badge}</div>
@@ -860,7 +842,6 @@ if st.session_state.selected_molecule:
 
         comp_table = f"""
         <div class="pi-card" style="margin-bottom:1.5rem;">
-          <div class="pi-section-hdr">Competitor Detail</div>
           <div class="pi-section-title">Price &amp; Volume Summary</div>
           <div class="pi-section-sub">Per entity · WTD average price · {period_label}</div>
           <div style="overflow-x:auto;">
@@ -1007,7 +988,6 @@ if st.session_state.selected_molecule:
     st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
     _html(f"""
     <div class="pi-card" style="margin-bottom:0.5rem;">
-      <div class="pi-section-hdr">Section 3</div>
       <div class="pi-section-title">Price over Time · Bubble Analysis</div>
       <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Bubble size = Volume · Colour = Entity</div>
     </div>
@@ -1219,36 +1199,12 @@ else:
         Welcome to PharmaIntel
       </h2>
       <p style="color:#64748b;font-size:1rem;max-width:600px;margin:0 auto 0 auto;">
-        Search for a molecule above and click <strong>⚡ Analyse</strong> to explore
+        Search for a molecule above and click <strong>Analyse</strong> to explore
         Cipla's procurement intelligence — price benchmarks, EXIM competitor analysis,
         and monthly trend data.
       </p>
     </div>
     """, unsafe_allow_html=True)
-
-    if available_molecules:
-        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="pi-section-title" style="margin-bottom:1rem;">Available Molecules</div>',
-            unsafe_allow_html=True,
-        )
-        mol_cols = st.columns(min(len(available_molecules), 4))
-        for idx, (mol_name, mol_info) in enumerate(available_molecules.items()):
-            with mol_cols[idx % 4]:
-                st.markdown(f"""
-                <div class="pi-kpi-card" style="text-align:center;padding:1.5rem;border-top-color:#3b82f6;margin-bottom:8px;">
-                  <div style="font-size:2rem;margin-bottom:0.5rem;">🧪</div>
-                  <div class="pi-kpi-label">Molecule</div>
-                  <div class="pi-kpi-value" style="font-size:1rem;">{mol_name.upper()}</div>
-                  <div style="font-size:0.7rem;color:#64748b;margin-top:0.3rem;">{mol_info.get("description","")}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button(f"🔍 Load {mol_name.upper()}", key=f"land_{mol_name}"):
-                    st.session_state.selected_molecule = mol_name
-                    st.session_state.selected_period = "FY 2025–26"
-                    st.session_state.pipeline_result = None
-                    st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("""
     <div class="pi-footer" style="margin-top:3rem;">
