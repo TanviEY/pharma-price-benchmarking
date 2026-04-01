@@ -1,21 +1,20 @@
 # src/fuzzy_matcher.py
 import json
 from fuzzywuzzy import fuzz
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from pathlib import Path
 
 class FuzzyMatcher:
     """Fuzzy matching for molecule name inputs"""
     
-    def __init__(self, threshold: int = 70):
+    def __init__(self, molecule_mapping: Dict, threshold: int = 70):
+        self.molecule_mapping = molecule_mapping
         self.threshold = threshold
-        self.molecule_mapping = self._load_molecule_mapping()
+
+        # Cache molecule names for faster matching
+        self.molecule_names = list(molecule_mapping.keys())
+
     
-    def _load_molecule_mapping(self) -> dict:
-        """Load molecule mapping"""
-        config_path = Path("config/molecule_mapping.json")
-        with open(config_path, 'r') as f:
-            return json.load(f)
     
     def match_molecule_input(self, user_input: str) -> List[Tuple[str, int]]:
         """

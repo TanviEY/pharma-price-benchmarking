@@ -1,19 +1,18 @@
 # pipeline.py
-from file_discovery import FileDiscovery 
-from data_loader import DataLoader 
-from data_processor import DataProcessor
-from settings import MOLECULE_MAPPING
+from src.file_discovery import FileDiscovery 
+from src.data_loader import DataLoader 
+from src.data_processor import DataProcessor
+from src.settings import MOLECULE_MAPPING
 
-fd = FileDiscovery()
 dl = DataLoader()
 dp = DataProcessor()
 
-def run_processing_pipeline(molecule_name):
+def run_processing_pipeline(molecule_name, file_discovery):
     """
     Universal pipeline for any molecule
     """
     # Step 1: Discover files
-    files = fd.discover_molecule_files(molecule_name)
+    files = file_discovery.discover_molecule_files(molecule_name)
     
     # Step 2: Load data
     molecule_df = dl.load_molecule_file(files, molecule_name)

@@ -9,8 +9,10 @@ from pathlib import Path
 
 from src.file_discovery import FileDiscovery
 from src.fuzzy_matcher import FuzzyMatcher
-from src.pipeline import ProcessingPipeline
+from src.pipeline import run_processing_pipeline
 from src.utils import Utils
+from src.settings import MOLECULE_MAPPING
+
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -56,9 +58,12 @@ if 'pipeline_metadata' not in st.session_state:
 # ============================================================================
 # INITIALIZE CLASSES
 # ============================================================================
-file_discovery = FileDiscovery("data/raw")
-fuzzy_matcher = FuzzyMatcher(threshold=70)
-pipeline = ProcessingPipeline("data/raw")
+
+file_discovery = FileDiscovery(
+    data_dir="data/raw",
+    molecule_mapping=MOLECULE_MAPPING
+)
+fuzzy_matcher = FuzzyMatcher(molecule_mapping=MOLECULE_MAPPING, threshold=70)
 
 # ============================================================================
 # HEADER

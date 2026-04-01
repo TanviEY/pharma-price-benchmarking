@@ -7,9 +7,11 @@ from typing import Dict, List, Tuple
 
 class FileDiscovery:
     """Discover molecule data files based on patterns"""
-    
-    def __init__(self, data_dir: str = "data/raw"):
-        self.data_dir = data_dir
+
+    def __init__(self, data_dir: str, molecule_mapping: Dict):
+        self.data_dir = Path(data_dir)
+        self.molecule_mapping = molecule_mapping
+
     
     
     def discover_molecule_files(self, molecule: str) -> List[str]:
@@ -50,18 +52,19 @@ class FileDiscovery:
         """Get all available molecules with their file count"""
         available = {}
         
-        for mol_name, mol_config in self.molecule_mapping['molecules'].items():
-            if mol_config['status'] == 'active':
-                files = self.discover_molecule_files(mol_name)
+        for mol_name, mol_config in self.molecule_mapping.items():
+            pattern = mol_config.get("file_pattern", f"*{mol_name}*")
+            files = list(self.data_dir.rglob(pattern))
+
+            if files:
                 available[mol_name] = {
-                    'file_count': len(files),
-                    'files': files,
-                    'cipla_available': self.discover_cipla_file() is not None,
-                    'description': mol_config.get('description', ''),
-                    'aliases': mol_config['aliases']
+                    "description": mol_config.get("description", ""),
+                    "file_count": len(files),
+                    "cipla_available": "cipla_api_filter" in mol_config
                 }
-        
+
         return available
+
     
     def get_molecule_file_info(self, molecule: str) -> Dict:
         """Get detailed file information for a molecule"""
