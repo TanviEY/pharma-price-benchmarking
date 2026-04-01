@@ -1,6 +1,6 @@
 # src/fuzzy_matcher.py
 import json
-from thefuzz import fuzz
+from fuzzywuzzy import fuzz
 from typing import List, Tuple, Optional
 from pathlib import Path
 

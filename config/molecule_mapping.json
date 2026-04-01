@@ -1,0 +1,17 @@
+{
+  "molecules": {
+    "azithromycin": {
+      "file_patterns": ["azithromycin_*.xlsx", "azithro_*.xlsx"],
+      "aliases": ["azithromycoon", "azithro", "azi", "zithromax", "azith"],
+      "cipla_api_filter": "AZITHROMYCIN DIHYDRATE",
+      "status": "active",
+      "description": "Azithromycin API - Macrolide antibiotic"
+    }
+  },
+  "settings": {
+    "fuzzy_match_threshold": 70,
+    "outlier_qty_threshold": 0.10,
+    "outlier_price_variance": 0.30,
+    "min_confidence_display": 70
+  }
+}

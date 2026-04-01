@@ -1,11 +1,7 @@
 # src/data_loader.py
+import pandas as pd
 from typing import Optional, Dict
 import warnings
-
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
 
 warnings.filterwarnings('ignore')
 
