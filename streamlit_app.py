@@ -394,13 +394,20 @@ def _position_badge(vs_pct):
         return '<span class="badge-premium">Premium</span>'
 
 
-def _entity_colour_map(entity_list):
-    """Return dict mapping entity name -> colour, Cipla always navy."""
+def _entity_colour_map(entity_list, cipla_entity_names=None):
+    """Return dict mapping entity name -> colour, Cipla entities always navy."""
+    if cipla_entity_names is None:
+        cipla_entity_names = set()
     cmap = {}
     palette_idx = 1  # index 0 is navy for Cipla
     for ent in entity_list:
         if ent not in cmap:
-            if ent.lower().startswith('cipla') or ent.lower() == 'cipla':
+            is_cipla = (
+                ent in cipla_entity_names
+                or ent.lower().startswith('cipla')
+                or ent.lower() == 'cipla'
+            )
+            if is_cipla:
                 cmap[ent] = ENTITY_COLOURS[0]
             else:
                 cmap[ent] = ENTITY_COLOURS[palette_idx % len(ENTITY_COLOURS)]
@@ -426,6 +433,11 @@ if st.session_state.selected_molecule:
     cipla_baseline  = metadata['cipla_baseline']
     filter_stats    = metadata['filter_stats']
     consolidated_df = result['data']['consolidated']
+
+    # Build set of entity names that belong to Cipla source
+    cipla_entity_names = set(
+        consolidated_df.loc[consolidated_df['source'] == 'Cipla', 'entity_name'].unique()
+    )
 
     # Mol info
     mol_cfg   = MOLECULE_MAPPING['molecules'].get(selected_mol, {})
@@ -633,7 +645,7 @@ if st.session_state.selected_molecule:
     chart_all = pd.concat([chart_df, mkt_per_period], ignore_index=True)
 
     all_entities = sorted(chart_df['entity_name'].unique().tolist())
-    cmap = _entity_colour_map(all_entities)
+    cmap = _entity_colour_map(all_entities, cipla_entity_names)
     cmap['Market Avg (EXIM)'] = '#888888'
 
     fig_bench = go.Figure()
@@ -641,7 +653,7 @@ if st.session_state.selected_molecule:
     for ent in all_entities:
         sub = chart_df[chart_df['entity_name'] == ent].sort_values('yyyymm')
         sub['period_label'] = sub['yyyymm'].apply(_fmt_period)
-        is_cipla = ent.lower().startswith('cipla') or ent.lower() == 'cipla'
+        is_cipla = ent in cipla_entity_names
         colour   = cmap.get(ent, ENTITY_COLOURS[1])
         fig_bench.add_trace(go.Scatter(
             x=sub['period_label'],
@@ -699,7 +711,7 @@ if st.session_state.selected_molecule:
     bubble_agg['volume_mt'] = bubble_agg['total_qty'] / 1000.0
 
     all_bubble_ents = sorted(bubble_agg['entity_name'].tolist())
-    b_cmap = _entity_colour_map(all_bubble_ents)
+    b_cmap = _entity_colour_map(all_bubble_ents, cipla_entity_names)
 
     with bc_left:
         st.markdown('<div class="card-wrap">', unsafe_allow_html=True)
@@ -793,24 +805,23 @@ if st.session_state.selected_molecule:
     )
 
     # Sort: Cipla first, rest by wtd_price ascending
-    cipla_mask = bench_agg['entity_name'].str.lower().str.startswith('cipla') | \
-                 (bench_agg['source'] == 'Cipla')
+    cipla_mask   = bench_agg['source'] == 'Cipla'
     bench_cipla  = bench_agg[cipla_mask].copy()
-    bench_others = bench_agg[~cipla_mask].sort_values('wtd_price').copy()
+    bench_others = bench_agg[~cipla_mask].sort_values('wtd_price').reset_index(drop=True)
     bench_sorted = pd.concat([bench_cipla, bench_others], ignore_index=True)
 
     cipla_ref_price = bench_cipla['wtd_price'].mean() if len(bench_cipla) > 0 else cipla_baseline['avg_price']
 
-    rows_html = ""
-    for i, row in bench_sorted.iterrows():
+    rows_html   = ""
+    other_count = 0
+    for _, row in bench_sorted.iterrows():
         is_cipla_row = row['source'] == 'Cipla'
         row_cls      = "cipla-row" if is_cipla_row else ""
         if is_cipla_row:
             num_str = ""
-        elif i in bench_others.index:
-            num_str = str(bench_others.index.get_loc(i) + 1)
         else:
-            num_str = ""
+            other_count += 1
+            num_str = str(other_count)
 
         vs_pct_val = ((row['wtd_price'] - cipla_ref_price) / cipla_ref_price * 100) if cipla_ref_price > 0 else 0.0
 
@@ -1019,20 +1030,20 @@ if st.session_state.selected_molecule:
 
         g_cipla_mask  = grade_bench['source'] == 'Cipla'
         g_bench_cipla = grade_bench[g_cipla_mask].copy()
-        g_bench_other = grade_bench[~g_cipla_mask].sort_values('wtd_price').copy()
+        g_bench_other = grade_bench[~g_cipla_mask].sort_values('wtd_price').reset_index(drop=True)
         g_bench_sort  = pd.concat([g_bench_cipla, g_bench_other], ignore_index=True)
         g_cipla_price = g_bench_cipla['wtd_price'].mean() if len(g_bench_cipla) > 0 else cipla_ref_price
 
-        g_rows_html = ""
-        for i, row in g_bench_sort.iterrows():
-            is_c      = row['source'] == 'Cipla'
-            row_cls   = "cipla-row" if is_c else ""
+        g_rows_html  = ""
+        g_other_cnt  = 0
+        for _, row in g_bench_sort.iterrows():
+            is_c    = row['source'] == 'Cipla'
+            row_cls = "cipla-row" if is_c else ""
             if is_c:
                 num_str = ""
-            elif i in g_bench_other.index:
-                num_str = str(int(g_bench_other.index.tolist().index(i)) + 1)
             else:
-                num_str = ""
+                g_other_cnt += 1
+                num_str = str(g_other_cnt)
             vs_pct_v  = ((row['wtd_price'] - g_cipla_price) / g_cipla_price * 100) if g_cipla_price > 0 else 0.0
             if is_c:
                 badge_h = '<span class="badge-benchmark">Benchmark</span>'
