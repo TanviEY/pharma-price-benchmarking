@@ -69,24 +69,42 @@ class DataProcessor:
         }
     
     @staticmethod
-    def prepare_azithromycin_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Prepare azithromycin data with grade/spec extraction"""
+    def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
+        """Prepare molecule EXIM data - works for any molecule file"""
         df = df.copy()
-        
-        # Extract date
-        df['yyyymm'] = df['BE_DATE'].apply(DataProcessor.extract_yyyymm)
-        
-        # Extract grade/spec
-        df['GRADE_SPEC'] = df['ITEM'].apply(DataProcessor.extract_grade_spec)
-        
+
+        # Find date column
+        date_col = None
+        for col in ['BE_DATE', 'be_date', 'DATE', 'date', 'BILL_DATE']:
+            if col in df.columns:
+                date_col = col
+                break
+        if date_col is None:
+            raise ValueError(f"No date column found. Available columns: {list(df.columns)}")
+        df['yyyymm'] = df[date_col].apply(DataProcessor.extract_yyyymm)
+
+        # Find item/description column for grade spec
+        item_col = None
+        for col in ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT']:
+            if col in df.columns:
+                item_col = col
+                break
+        if item_col:
+            df['GRADE_SPEC'] = df[item_col].apply(DataProcessor.extract_grade_spec)
+        else:
+            df['GRADE_SPEC'] = 'USP'
+
         # Ensure QTY is numeric
         df['QTY'] = pd.to_numeric(df['QTY'], errors='coerce')
         df['TOTAL_VALUE'] = pd.to_numeric(df['TOTAL_VALUE'], errors='coerce')
-        
+
         # Remove rows with missing critical values
         df = df.dropna(subset=['yyyymm', 'QTY', 'TOTAL_VALUE'])
-        
+
         return df
+
+    # Keep old name as alias for backward compatibility
+    prepare_azithromycin_data = prepare_molecule_data
     
     @staticmethod
     def prepare_cipla_data(df: pd.DataFrame) -> pd.DataFrame:

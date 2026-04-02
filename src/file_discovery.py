@@ -1,6 +1,7 @@
 # src/file_discovery.py
 import os
 import glob
+import fnmatch
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -28,11 +29,20 @@ class FileDiscovery:
             return []
         
         patterns = self.molecule_mapping['molecules'][molecule]['file_patterns']
-        found_files = []
+        found_files = set()
         
+        # Case-sensitive glob first
         for pattern in patterns:
             file_path = os.path.join(self.data_dir, pattern)
-            found_files.extend(glob.glob(file_path))
+            found_files.update(glob.glob(file_path))
+        
+        # Case-insensitive fallback: scan directory
+        if self.data_dir.exists():
+            for f in self.data_dir.iterdir():
+                if f.is_file():
+                    for pattern in patterns:
+                        if fnmatch.fnmatch(f.name.lower(), pattern.lower()):
+                            found_files.add(str(f))
         
         return sorted(found_files)
     
@@ -54,14 +64,25 @@ class FileDiscovery:
         
         for mol_name, mol_config in self.molecule_mapping['molecules'].items():
             patterns = mol_config.get("file_patterns", [f"*{mol_name}*"])
-            files = []
-            for pattern in patterns:
-                files.extend(list(self.data_dir.rglob(pattern)))
+            found_files = set()
 
-            if files:
+            # Case-sensitive glob first
+            for pattern in patterns:
+                file_path = os.path.join(self.data_dir, pattern)
+                found_files.update(glob.glob(file_path))
+
+            # Case-insensitive fallback: scan directory
+            if self.data_dir.exists():
+                for f in self.data_dir.iterdir():
+                    if f.is_file():
+                        for pattern in patterns:
+                            if fnmatch.fnmatch(f.name.lower(), pattern.lower()):
+                                found_files.add(str(f))
+
+            if found_files:
                 available[mol_name] = {
                     "description": mol_config.get("description", ""),
-                    "file_count": len(files),
+                    "file_count": len(found_files),
                     "cipla_available": "cipla_api_filter" in mol_config
                 }
 
