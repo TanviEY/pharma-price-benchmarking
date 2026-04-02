@@ -6,6 +6,20 @@
       "cipla_api_filter": "AZITHROMYCIN DIHYDRATE",
       "status": "active",
       "description": "Azithromycin API - Macrolide antibiotic"
+    },
+    "lamivudine": {
+      "file_patterns": ["Lamivudine_*.xlsx", "lamivudine_*.xlsx"],
+      "aliases": ["lami", "3tc", "epivir", "lamivudin"],
+      "cipla_api_filter": "LAMIVUDINE",
+      "status": "active",
+      "description": "Lamivudine API - Antiretroviral nucleoside reverse transcriptase inhibitor"
+    },
+    "tenofovir_disoproxil_fumarate": {
+      "file_patterns": ["TENOFOVIR_DISOPROXIL_FUMARATE_*.xlsx", "tenofovir_disoproxil_fumarate_*.xlsx", "tenofovir_*.xlsx"],
+      "aliases": ["tenofovir", "tdf", "viread", "tenofovir disoproxil", "tenofovir df"],
+      "cipla_api_filter": "TENOFOVIR DISOPROXIL FUMARATE",
+      "status": "active",
+      "description": "Tenofovir Disoproxil Fumarate API - Antiretroviral nucleotide reverse transcriptase inhibitor"
     }
   },
   "settings": {
