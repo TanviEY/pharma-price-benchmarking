@@ -553,7 +553,7 @@ if hero_mol_input.strip() and not st.session_state.selected_molecule:
 # Handle Analyse click or Enter key
 if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
     top_match = fuzzy_matcher.get_top_match(hero_mol_input.strip())
-    if top_match and top_match in available_molecules:
+    if top_match and top_match in MOLECULE_MAPPING["molecules"]:
         st.session_state.selected_molecule = top_match
         st.session_state.selected_period = hero_period
         st.session_state.pipeline_result = None

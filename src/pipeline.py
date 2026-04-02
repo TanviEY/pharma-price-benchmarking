@@ -36,7 +36,7 @@ def run_processing_pipeline(molecule_name, file_discovery):
         raw_record_count = len(molecule_df)
 
         # Step 3: Prepare data
-        molecule_df = DataProcessor.prepare_azithromycin_data(molecule_df)
+        molecule_df = DataProcessor.prepare_molecule_data(molecule_df)
         cipla_df = DataProcessor.prepare_cipla_data(cipla_df)
 
         # Step 4: Calculate baselines
