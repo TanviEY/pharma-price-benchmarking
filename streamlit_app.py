@@ -1,8 +1,10 @@
 # streamlit_app.py
 import calendar
+import math
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 from pathlib import Path
 
 from src.file_discovery import FileDiscovery
@@ -51,24 +53,6 @@ def fmt_qty(value: float) -> str:
     return f"{int(value):,}"
 
 
-PERIOD_OPTIONS = {
-    "FY 2025–26": ("202504", "202603"),
-    "FY 2024–25": ("202404", "202503"),
-    "Q4 FY26":    ("202601", "202603"),
-    "Q3 FY26":    ("202610", "202612"),
-    "Q2 FY26":    ("202607", "202609"),
-    "Q1 FY26":    ("202604", "202606"),
-    "All Time":   (None, None),
-}
-
-
-def filter_by_period(df, period_label):
-    start, end = PERIOD_OPTIONS.get(period_label, (None, None))
-    if start is None:
-        return df
-    return df[(df["yyyymm"] >= start) & (df["yyyymm"] <= end)]
-
-
 AVATAR_COLORS = [
     "#3b82f6", "#16a34a", "#7c3aed", "#d97706",
     "#0891b2", "#dc2626", "#0d9488",
@@ -110,6 +94,27 @@ def _render_sparkline(monthly_values, color="#3b82f6") -> str:
         f'<div style="display:flex;align-items:flex-end;gap:1px;'
         f'margin-top:6px;height:26px;">{bars}</div>'
     )
+
+
+def _pagination_bar(total_items, page_size, current_page, state_key, prefix):
+    """Renders numbered page buttons. Returns the (possibly updated) current page."""
+    total_pages = max(1, math.ceil(total_items / page_size))
+    if total_pages <= 1:
+        return 1
+    cols = st.columns(min(total_pages, _MAX_PAGE_BTNS))
+    for i, col in enumerate(cols):
+        page_num = i + 1
+        label = f"**{page_num}**" if page_num == current_page else str(page_num)
+        with col:
+            btn_style = "primary" if page_num == current_page else "secondary"
+            if st.button(label, key=f"{prefix}_pg_{page_num}", type=btn_style):
+                st.session_state[state_key] = page_num
+                st.rerun()
+    return current_page
+
+
+_PAGE_SIZE = 10       # rows per page for all paginated tables / charts
+_MAX_PAGE_BTNS = 10   # max numbered page buttons to display at once
 
 
 # ─── page config ─────────────────────────────────────────────────────────────
@@ -449,9 +454,15 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 # ─── session state ────────────────────────────────────────────────────────────
 for _k, _v in [
     ("selected_molecule", None),
-    ("selected_period", "FY 2025–26"),
     ("pipeline_result", None),
     ("chart_month_filter", "All Months"),
+    ("bar_view_mode", "Top 25% by Volume"),
+    ("bar_page", 1),
+    ("comp_table_page", 1),
+    ("cipla_table_page", 1),
+    ("exim_table_page", 1),
+    ("cipla_from_month", None),
+    ("cipla_to_month", None),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -498,7 +509,7 @@ st.markdown("""
 # Search card (placed below the hero with a clean positive margin)
 with st.container():
     st.markdown('<div class="pi-search-wrap">', unsafe_allow_html=True)
-    sc1, sc2, sc3 = st.columns([4, 2, 2])
+    sc1, sc_btn = st.columns([5, 2])
     with sc1:
         hero_mol_input = st.text_input(
             "Molecule",
@@ -507,24 +518,10 @@ with st.container():
             key="hero_mol_input",
             on_change=_on_mol_enter,
         )
-    with sc2:
-        period_keys = list(PERIOD_OPTIONS.keys())
-        default_idx = period_keys.index(st.session_state.selected_period) if st.session_state.selected_period in period_keys else 0
-        hero_period = st.selectbox(
-            "Period",
-            period_keys,
-            index=default_idx,
-            key="hero_period_sel",
-        )
-    with sc3:
-        hero_origin = st.selectbox(
-            "Origin",
-            ["All Origins", "India", "China", "EU / US"],
-            key="hero_origin_sel",
-        )
-    st.markdown('<div class="pi-analyse-btn">', unsafe_allow_html=True)
-    analyse_clicked = st.button("Analyse", key="hero_analyse_btn")
-    st.markdown("</div>", unsafe_allow_html=True)
+    with sc_btn:
+        st.markdown('<div class="pi-analyse-btn">', unsafe_allow_html=True)
+        analyse_clicked = st.button("Analyse", key="hero_analyse_btn")
+        st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Check Enter-key trigger
@@ -545,7 +542,6 @@ if hero_mol_input.strip() and not st.session_state.selected_molecule:
             with sug_cols[i]:
                 if st.button(mol_name.upper(), key=f"sug_{mol_name}_{i}"):
                     st.session_state.selected_molecule = mol_name
-                    st.session_state.selected_period = hero_period
                     st.session_state.pipeline_result = None
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -555,7 +551,6 @@ if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
     top_match = fuzzy_matcher.get_top_match(hero_mol_input.strip())
     if top_match and top_match in MOLECULE_MAPPING["molecules"]:
         st.session_state.selected_molecule = top_match
-        st.session_state.selected_period = hero_period
         st.session_state.pipeline_result = None
         st.rerun()
     else:
@@ -568,7 +563,6 @@ if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
 # ─── MAIN CONTENT ─────────────────────────────────────────────────────────────
 if st.session_state.selected_molecule:
     selected_mol = st.session_state.selected_molecule
-    selected_period = st.session_state.selected_period
 
     # ── run pipeline ──────────────────────────────────────────────────────────
     with st.spinner(f"Loading data for {selected_mol.upper()}…"):
@@ -584,32 +578,20 @@ if st.session_state.selected_molecule:
 
     consolidated_df = result["data"]["consolidated"]
 
-    # Apply period filter
-    filtered_df = filter_by_period(consolidated_df, selected_period)
-    if len(filtered_df) == 0:
-        filtered_df = consolidated_df.copy()
-        st.markdown(
-            f'<div class="pi-info-banner" style="margin:1rem 1.5rem 0 1.5rem;">'
-            f'ℹ️ No data found for <strong>{selected_period}</strong>. '
-            f'Showing all available data.</div>',
-            unsafe_allow_html=True,
-        )
-
-    # Metadata
+    # Metadata (derived from full consolidated_df)
     mol_cfg = MOLECULE_MAPPING["molecules"].get(selected_mol, {})
     cas_code = mol_cfg.get("cipla_api_filter", selected_mol.upper())
-    uom = filtered_df["uom"].mode()[0] if len(filtered_df) > 0 else "KG"
-    grade_series = filtered_df[filtered_df["source"] == "Cipla"]["GRADE_SPEC"]
+    uom = consolidated_df["uom"].mode()[0] if len(consolidated_df) > 0 else "KG"
+    grade_series = consolidated_df[consolidated_df["source"] == "Cipla"]["GRADE_SPEC"]
     grade = grade_series.mode()[0] if len(grade_series) > 0 else "USP"
-    period_label = selected_period
 
-    # Build month filter options for Section 2
-    available_months_raw = sorted(filtered_df["yyyymm"].unique())
+    # Build global month filter options from full consolidated_df
+    available_months_raw = sorted(consolidated_df["yyyymm"].unique())
     available_months_labels = ["All Months"] + [yyyymm_to_label(m) for m in available_months_raw]
     month_label_to_yyyymm = {yyyymm_to_label(m): m for m in available_months_raw}
 
     # ── MATERIAL BANNER ──────────────────────────────────────────────────────
-    export_csv = filtered_df.to_csv(index=False).encode("utf-8")
+    export_csv = consolidated_df.to_csv(index=False).encode("utf-8")
 
     bann_l, bann_r = st.columns([5, 1])
     with bann_l:
@@ -623,7 +605,6 @@ if st.session_state.selected_molecule:
                 <span class="pi-chip">API</span>
                 <span class="pi-chip">CAS {cas_code[:22]}</span>
                 <span class="pi-chip">INR / {uom}</span>
-                <span class="pi-chip">{period_label}</span>
               </div>
             </div>
           </div>
@@ -637,11 +618,42 @@ if st.session_state.selected_molecule:
         st.download_button(
             label="Export CSV",
             data=export_csv,
-            file_name=f"{selected_mol}_{selected_period.replace(' ', '_').replace('–', '-')}.csv",
+            file_name=f"{selected_mol}_all.csv",
             mime="text/csv",
             key="excel_export",
         )
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── GLOBAL MONTH FILTER (drives Sections 1, 2, 3) ────────────────────────
+    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+    gf_l, gf_r = st.columns([5, 2])
+    with gf_l:
+        st.markdown(
+            '<p style="font-size:0.78rem;color:#64748b;margin:0.5rem 0 0.2rem 0;">'
+            'Global filter — applies to KPI cards, bar chart, and bubble chart</p>',
+            unsafe_allow_html=True,
+        )
+    with gf_r:
+        st.markdown('<div class="pi-month-filter">', unsafe_allow_html=True)
+        _saved_month = st.session_state.get("chart_month_filter", "All Months")
+        chart_month = st.selectbox(
+            "Filter by Month",
+            available_months_labels,
+            index=available_months_labels.index(_saved_month) if _saved_month in available_months_labels else 0,
+            key="chart_month_sel",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.session_state["chart_month_filter"] = chart_month
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Apply global month filter → filtered_df used by Sections 1, 2, 3
+    if chart_month != "All Months" and chart_month in month_label_to_yyyymm:
+        selected_yyyymm = month_label_to_yyyymm[chart_month]
+        filtered_df = consolidated_df[consolidated_df["yyyymm"] == selected_yyyymm]
+    else:
+        filtered_df = consolidated_df
+
+    month_context = chart_month if chart_month != "All Months" else "All Months"
 
     # ─────────────────────────────────────────────────────────────────────────
     # SECTION 1 — 5 KPI Cards with Sparklines
@@ -674,22 +686,22 @@ if st.session_state.selected_molecule:
     cost_adv = cipla_price - market_price if market_price > 0 else 0.0
     cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
 
-    # Sparklines — monthly WTD avg
-    months_sorted = sorted(filtered_df["yyyymm"].unique())
+    # Sparklines — monthly WTD avg across ALL months (consolidated_df, not filtered)
+    months_sorted_all = sorted(consolidated_df["yyyymm"].unique())
 
     def _monthly_wtd(src_fn, months):
         vals = []
         for m in months:
-            mdf = filtered_df[filtered_df["yyyymm"] == m]
+            mdf = consolidated_df[consolidated_df["yyyymm"] == m]
             mdf = src_fn(mdf)
             vals.append(_safe_wtd_avg(mdf["Sum_of_TOTAL_VALUE"], mdf["Sum_of_QTY"]))
         return vals
 
     cipla_spark = _render_sparkline(
-        _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted), "#3b82f6"
+        _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
     )
     market_spark = _render_sparkline(
-        _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted), "#0891b2"
+        _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
     )
 
     # Cost advantage badge
@@ -698,7 +710,7 @@ if st.session_state.selected_molecule:
         adv_word = "below" if cost_adv < 0 else "above"
         adv_text = f"{adv_sym} {cost_pct:.1f}% {adv_word} market"
     else:
-        adv_text = period_label
+        adv_text = month_context
 
     st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
@@ -709,7 +721,7 @@ if st.session_state.selected_molecule:
         <div class="pi-kpi-card" style="border-top-color:#3b82f6;">
           <div class="pi-kpi-label">Cipla WTD Avg · ERP</div>
           <div class="pi-kpi-value">₹{cipla_price:,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{period_label}</span></div>
+          <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{month_context}</span></div>
           <div class="pi-kpi-note">{cipla_n_records} POs · {fmt_qty(cipla_total_qty)} {uom}</div>
           {cipla_spark}
         </div>
@@ -767,36 +779,10 @@ if st.session_state.selected_molecule:
     # ─────────────────────────────────────────────────────────────────────────
     st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
 
-    # Month filter row — sits cleanly above the two Section 2 cards
-    filt_col_l, filt_col_r = st.columns([5, 2])
-    with filt_col_l:
-        st.markdown(
-            '<p style="font-size:0.78rem;color:#64748b;margin:0.5rem 0 0.2rem 0;">'
-            'Benchmark Comparison · Filter by month to drill down</p>',
-            unsafe_allow_html=True
-        )
-    with filt_col_r:
-        st.markdown('<div class="pi-month-filter">', unsafe_allow_html=True)
-        _saved_month = st.session_state.get("chart_month_filter", "All Months")
-        chart_month = st.selectbox(
-            "Filter month",
-            available_months_labels,
-            index=available_months_labels.index(_saved_month) if _saved_month in available_months_labels else 0,
-            key="chart_month_sel",
-            label_visibility="collapsed",
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.session_state["chart_month_filter"] = chart_month
+    # Section 2 uses filtered_df (already filtered by global month selector)
+    s2_df = filtered_df
 
-    # Apply month filter for Section 2 charts only
-    if chart_month != "All Months" and chart_month in month_label_to_yyyymm:
-        s2_df = filtered_df[filtered_df["yyyymm"] == month_label_to_yyyymm[chart_month]]
-    else:
-        s2_df = filtered_df
-
-    month_context = chart_month if chart_month != "All Months" else period_label
-
-    # Per-entity WTD avg aggregation (uses s2_df for Section 2 only)
+    # Per-entity WTD avg aggregation
     all_ent_agg = (
         s2_df.groupby(["entity_name", "source"])
         .apply(lambda g: pd.Series({
@@ -815,33 +801,81 @@ if st.session_state.selected_molecule:
     s2_market_df = s2_df[s2_df["source"] != "Cipla"]
     s2_market_price = _safe_wtd_avg(s2_market_df["Sum_of_TOTAL_VALUE"], s2_market_df["Sum_of_QTY"])
 
-    bar_items = []
+    bar_items_competitor = []
     for _, row in non_cipla_rows.iterrows():
-        bar_items.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
-    if len(cipla_ent_row) > 0:
-        bar_items.append({"entity": "★ Cipla", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()})
-    if s2_market_price > 0:
-        bar_items.append({"entity": "EXIM Avg", "price": s2_market_price, "type": "market", "qty": s2_market_df["Sum_of_QTY"].sum()})
+        bar_items_competitor.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
 
-    bar_items_sorted = sorted(bar_items, key=lambda x: x["price"])
+    cipla_bar_item = None
+    market_bar_item = None
+    if len(cipla_ent_row) > 0:
+        cipla_bar_item = {"entity": "★ Cipla", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()}
+    if s2_market_price > 0:
+        market_bar_item = {"entity": "EXIM Avg", "price": s2_market_price, "type": "market", "qty": s2_market_df["Sum_of_QTY"].sum()}
 
     def _bar_width(price, min_p, max_p):
         price_range = max_p - min_p if max_p > min_p else 1
         return int(40 + (price - min_p) / price_range * 55)
 
-    if bar_items_sorted:
-        prices_all = [r["price"] for r in bar_items_sorted]
-        min_p = min(prices_all)
-        max_p = max(prices_all)
-    else:
-        min_p = max_p = 0
-
     s2_left, s2_right = st.columns([3, 2])
 
     with s2_left:
+        # ── Top 25% toggle ────────────────────────────────────────────────────
+        bar_view = st.radio(
+            "View mode",
+            ["Top 25% by Volume", "All Competitors"],
+            index=0 if st.session_state["bar_view_mode"] == "Top 25% by Volume" else 1,
+            key="bar_view_radio",
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        if bar_view != st.session_state["bar_view_mode"]:
+            st.session_state["bar_view_mode"] = bar_view
+            st.session_state["bar_page"] = 1
+            st.rerun()
+
+        # Determine which competitors to show
+        if bar_view == "Top 25% by Volume" and len(non_cipla_rows) > 0:
+            volumes = non_cipla_rows["total_qty"].values
+            threshold = np.percentile(volumes, 75)
+            top25_rows = non_cipla_rows[non_cipla_rows["total_qty"] >= threshold]
+            if len(top25_rows) == 0:
+                top25_rows = non_cipla_rows
+            display_competitors = top25_rows.reset_index(drop=True)
+        else:
+            display_competitors = non_cipla_rows
+
+        # Pagination for "All Competitors" mode
+        if bar_view == "All Competitors":
+            bar_page = st.session_state.get("bar_page", 1)
+            total_comp = len(display_competitors)
+            page_size = _PAGE_SIZE
+            start = (bar_page - 1) * page_size
+            end = start + page_size
+            page_competitors = display_competitors.iloc[start:end]
+        else:
+            page_competitors = display_competitors
+
+        # Build the full bar items list for display
+        bar_items_display = []
+        for _, row in page_competitors.iterrows():
+            bar_items_display.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
+        if cipla_bar_item:
+            bar_items_display.append(cipla_bar_item)
+        if market_bar_item:
+            bar_items_display.append(market_bar_item)
+
+        bar_items_sorted = sorted(bar_items_display, key=lambda x: x["price"])
+
+        if bar_items_sorted:
+            prices_all = [r["price"] for r in bar_items_sorted]
+            min_p = min(prices_all)
+            max_p = max(prices_all)
+        else:
+            min_p = max_p = 0
+
         # Build HTML bar chart
         bar_html = f"""
-        <div class="pi-card" style="margin-bottom:1.5rem;">
+        <div class="pi-card" style="margin-bottom:0.5rem;">
           <div class="pi-section-title">WTD Average Price Comparison (₹/{uom})</div>
           <div class="pi-section-sub">Cipla vs competitors · {month_context}</div>
           <div style="padding:0.2rem 0;">
@@ -897,11 +931,16 @@ if st.session_state.selected_molecule:
         bar_html += "</div></div>"
         _html(bar_html)
 
+        # Pagination (only for "All Competitors" mode)
+        if bar_view == "All Competitors":
+            _pagination_bar(len(display_competitors), _PAGE_SIZE, st.session_state.get("bar_page", 1), "bar_page", "bar")
+
     with s2_right:
-        # Competitor detail table
-        table_rows = ""
+        # Competitor detail table — sort by volume descending, Cipla pinned at top
+        non_cipla_by_vol = non_cipla_rows.sort_values("total_qty", ascending=False).reset_index(drop=True)
 
         # Cipla row first
+        table_rows = ""
         if len(cipla_ent_row) > 0:
             cipla_ent_name = cipla_ent_row.iloc[0]["entity_name"]
             cipla_qty_disp = cipla_ent_row["total_qty"].sum()
@@ -923,12 +962,18 @@ if st.session_state.selected_molecule:
             </tr>
             """
 
-        for idx, (_, row) in enumerate(non_cipla_rows.iterrows()):
+        # Paginated non-Cipla rows
+        comp_page = st.session_state.get("comp_table_page", 1)
+        ct_start = (comp_page - 1) * _PAGE_SIZE
+        ct_end = ct_start + _PAGE_SIZE
+        page_non_cipla = non_cipla_by_vol.iloc[ct_start:ct_end]
+
+        for idx, (_, row) in enumerate(page_non_cipla.iterrows()):
             ent = row["entity_name"]
             price = row["wtd_price"]
             qty = row["total_qty"]
             vs_pct = ((price - cipla_bar_price) / cipla_bar_price * 100) if cipla_bar_price > 0 else 0
-            av_col = _avatar_color(idx)
+            av_col = _avatar_color(ct_start + idx)
             av_ini = _initials(ent)
             if vs_pct < 0:
                 vs_html = f'<span style="color:#16a34a;font-weight:700;">▼ {abs(vs_pct):.1f}%</span>'
@@ -958,7 +1003,7 @@ if st.session_state.selected_molecule:
             """
 
         comp_table = f"""
-        <div class="pi-card" style="margin-bottom:1.5rem;">
+        <div class="pi-card" style="margin-bottom:0.5rem;">
           <div class="pi-section-title">Price &amp; Volume Summary</div>
           <div class="pi-section-sub">Per entity · WTD average price · {month_context}</div>
           <div style="overflow-x:auto;">
@@ -978,6 +1023,7 @@ if st.session_state.selected_molecule:
         </div>
         """
         _html(comp_table)
+        _pagination_bar(len(non_cipla_by_vol), _PAGE_SIZE, comp_page, "comp_table_page", "comp")
 
     st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
 
@@ -990,14 +1036,25 @@ if st.session_state.selected_molecule:
         .apply(lambda g: pd.Series({
             "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
             "sum_qty":   g["Sum_of_QTY"].sum(),
+            "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
         }))
         .reset_index()
     )
     bubble_df = bubble_df[bubble_df["wtd_price"] > 0].copy()
     bubble_df["month_label"] = bubble_df["yyyymm"].apply(yyyymm_to_label)
 
-    entities_bubble = sorted(bubble_df["entity_name"].unique())
     cipla_bubble_ents = set(bubble_df[bubble_df["source"] == "Cipla"]["entity_name"].unique())
+
+    # Top 25% by value: total value per entity across filtered_df
+    ent_total_val = bubble_df.groupby("entity_name")["total_val"].sum()
+    non_cipla_ents_b = [e for e in ent_total_val.index if e not in cipla_bubble_ents]
+    if non_cipla_ents_b:
+        val_threshold = np.percentile(ent_total_val[non_cipla_ents_b].values, 75)
+        top25_ents_b = set(e for e in non_cipla_ents_b if ent_total_val[e] >= val_threshold)
+    else:
+        top25_ents_b = set()
+    # Always include Cipla entities
+    entities_bubble = sorted(top25_ents_b | cipla_bubble_ents)
 
     # Scale bubble sizes: sqrt(qty / max_qty) * 60 + 10
     max_qty_b = bubble_df["sum_qty"].max() if bubble_df["sum_qty"].max() > 0 else 1
@@ -1006,7 +1063,7 @@ if st.session_state.selected_molecule:
     # Color map
     entity_colors_b = {}
     b_color_idx = 0
-    for ent in entities_bubble:
+    for ent in sorted(bubble_df["entity_name"].unique()):
         if ent in cipla_bubble_ents:
             entity_colors_b[ent] = "#1d4ed8"
         else:
@@ -1050,11 +1107,13 @@ if st.session_state.selected_molecule:
     for ent in entities_bubble:
         ent_df = bubble_df[bubble_df["entity_name"] == ent].sort_values("yyyymm")
         color = entity_colors_b.get(ent, "#64748b")
+        # Cipla traces use "cipla-<molecule>" as the display name
+        trace_name = f"cipla-{selected_mol.lower()}" if ent in cipla_bubble_ents else ent
         fig_bubble.add_trace(go.Scatter(
             x=ent_df["month_label"],
             y=ent_df["wtd_price"],
             mode="markers",
-            name=ent,
+            name=trace_name,
             marker=dict(
                 size=ent_df["bubble_size"].tolist(),
                 sizemode="diameter",
@@ -1065,7 +1124,7 @@ if st.session_state.selected_molecule:
             ),
             customdata=list(zip(ent_df["sum_qty"], ent_df["yyyymm"])),
             hovertemplate=(
-                f"<b>{ent}</b><br>"
+                f"<b>{trace_name}</b><br>"
                 "Month: %{x}<br>"
                 f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
                 f"Volume: %{{customdata[0]:,.0f}} {uom}<extra></extra>"
@@ -1122,9 +1181,52 @@ if st.session_state.selected_molecule:
     t4_l, t4_r = st.columns(2)
 
     with t4_l:
-        # Cipla Monthly table
+        # Cipla Monthly table — uses full Cipla data (before global month filter)
+        cipla_full_df = consolidated_df[consolidated_df["source"] == "Cipla"]
+        cipla_all_months = sorted(cipla_full_df["yyyymm"].unique())
+
+        # Independent From/To month filter
+        cipla_month_labels = [yyyymm_to_label(m) for m in cipla_all_months]
+        cipla_month_label_to_yyyymm = {yyyymm_to_label(m): m for m in cipla_all_months}
+
+        from_default = st.session_state.get("cipla_from_month") or (cipla_month_labels[0] if cipla_month_labels else None)
+        to_default = st.session_state.get("cipla_to_month") or (cipla_month_labels[-1] if cipla_month_labels else None)
+        if from_default not in cipla_month_labels and cipla_month_labels:
+            from_default = cipla_month_labels[0]
+        if to_default not in cipla_month_labels and cipla_month_labels:
+            to_default = cipla_month_labels[-1]
+
+        cf1, cf2 = st.columns(2)
+        with cf1:
+            from_sel = st.selectbox(
+                "From month",
+                cipla_month_labels,
+                index=cipla_month_labels.index(from_default) if from_default in cipla_month_labels else 0,
+                key="cipla_from_sel",
+            )
+        with cf2:
+            to_sel = st.selectbox(
+                "To month",
+                cipla_month_labels,
+                index=cipla_month_labels.index(to_default) if to_default in cipla_month_labels else max(0, len(cipla_month_labels) - 1),
+                key="cipla_to_sel",
+            )
+
+        if from_sel != st.session_state.get("cipla_from_month") or to_sel != st.session_state.get("cipla_to_month"):
+            st.session_state["cipla_from_month"] = from_sel
+            st.session_state["cipla_to_month"] = to_sel
+            st.session_state["cipla_table_page"] = 1
+            st.rerun()
+
+        from_yyyymm = cipla_month_label_to_yyyymm.get(from_sel, cipla_all_months[0] if cipla_all_months else "")
+        to_yyyymm = cipla_month_label_to_yyyymm.get(to_sel, cipla_all_months[-1] if cipla_all_months else "")
+
+        cipla_filtered_full = cipla_full_df[
+            (cipla_full_df["yyyymm"] >= from_yyyymm) & (cipla_full_df["yyyymm"] <= to_yyyymm)
+        ]
+
         cipla_monthly = (
-            cipla_df_f.groupby("yyyymm")
+            cipla_filtered_full.groupby("yyyymm")
             .apply(lambda g: pd.Series({
                 "uom_m":     g["uom"].mode()[0] if len(g) > 0 else uom,
                 "grade_m":   g["GRADE_SPEC"].mode()[0] if len(g) > 0 else grade,
@@ -1136,15 +1238,21 @@ if st.session_state.selected_molecule:
             .sort_values("yyyymm")
         )
 
-        max_qty_idx = cipla_monthly["sum_qty"].idxmax() if len(cipla_monthly) > 0 else None
-        min_qty_idx = cipla_monthly["sum_qty"].idxmin() if len(cipla_monthly) > 1 else None
+        # Pagination
+        cipla_pg = st.session_state.get("cipla_table_page", 1)
+        cip_start = (cipla_pg - 1) * _PAGE_SIZE
+        cip_end = cip_start + _PAGE_SIZE
+        cipla_monthly_page = cipla_monthly.iloc[cip_start:cip_end]
+
+        max_qty_idx = cipla_monthly_page["sum_qty"].idxmax() if len(cipla_monthly_page) > 0 else None
+        min_qty_idx = cipla_monthly_page["sum_qty"].idxmin() if len(cipla_monthly_page) > 1 else None
 
         cip_rows_html = ""
-        for idx_r, row_r in cipla_monthly.iterrows():
+        for idx_r, row_r in cipla_monthly_page.iterrows():
             qty_style = ""
             if max_qty_idx is not None and idx_r == max_qty_idx:
                 qty_style = 'style="color:#16a34a;font-weight:700;"'
-            elif min_qty_idx is not None and idx_r == min_qty_idx and len(cipla_monthly) > 1:
+            elif min_qty_idx is not None and idx_r == min_qty_idx and len(cipla_monthly_page) > 1:
                 qty_style = 'style="color:#dc2626;font-weight:700;"'
             cip_rows_html += f"""
             <tr>
@@ -1157,11 +1265,11 @@ if st.session_state.selected_molecule:
             </tr>
             """
 
-        total_qty_c = cipla_df_f["Sum_of_QTY"].sum()
-        total_val_c = cipla_df_f["Sum_of_TOTAL_VALUE"].sum()
-        wtd_avg_c = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
-        grade_c = cipla_df_f["GRADE_SPEC"].mode()[0] if len(cipla_df_f) > 0 else grade
-        uom_c = cipla_df_f["uom"].mode()[0] if len(cipla_df_f) > 0 else uom
+        total_qty_c = cipla_filtered_full["Sum_of_QTY"].sum()
+        total_val_c = cipla_filtered_full["Sum_of_TOTAL_VALUE"].sum()
+        wtd_avg_c = _safe_wtd_avg(cipla_filtered_full["Sum_of_TOTAL_VALUE"], cipla_filtered_full["Sum_of_QTY"])
+        grade_c = cipla_filtered_full["GRADE_SPEC"].mode()[0] if len(cipla_filtered_full) > 0 else grade
+        uom_c = cipla_filtered_full["uom"].mode()[0] if len(cipla_filtered_full) > 0 else uom
 
         cip_rows_html += f"""
         <tr class="footer-row">
@@ -1175,11 +1283,11 @@ if st.session_state.selected_molecule:
         """
 
         _html(f"""
-<div class="pi-card" style="margin-bottom:1.5rem;">
+<div class="pi-card" style="margin-bottom:0.5rem;">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
 <div>
 <div class="pi-section-title">Cipla — Monthly Price &amp; Volume</div>
-<div class="pi-section-sub">api = {selected_mol.upper()} · {period_label} · {uom_c} · {grade_c} · Sum QTY · Avg PRICE</div>
+<div class="pi-section-sub">api = {selected_mol.upper()} · {from_sel} to {to_sel} · {uom_c} · {grade_c} · Sum QTY · Avg PRICE</div>
 </div>
 <span class="badge badge-blue">ERP</span>
 </div>
@@ -1196,9 +1304,10 @@ if st.session_state.selected_molecule:
 </div>
 </div>
 """)
+        _pagination_bar(len(cipla_monthly), _PAGE_SIZE, cipla_pg, "cipla_table_page", "cipla")
 
     with t4_r:
-        # EXIM Supplier table
+        # EXIM Supplier table — sort by qty descending, no Origin column
         exim_agg = (
             market_df_f.groupby("entity_name")
             .apply(lambda g: pd.Series({
@@ -1209,11 +1318,18 @@ if st.session_state.selected_molecule:
                 "avg_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
             }))
             .reset_index()
-            .sort_values("avg_price")
+            .sort_values("sum_qty", ascending=False)
+            .reset_index(drop=True)
         )
 
+        # Pagination
+        exim_pg = st.session_state.get("exim_table_page", 1)
+        ex_start = (exim_pg - 1) * _PAGE_SIZE
+        ex_end = ex_start + _PAGE_SIZE
+        exim_page = exim_agg.iloc[ex_start:ex_end]
+
         exim_rows_html = ""
-        for _, row_e in exim_agg.iterrows():
+        for _, row_e in exim_page.iterrows():
             vs_diff = row_e["avg_price"] - cipla_price
             if cipla_price > 0:
                 if vs_diff < 0:
@@ -1228,7 +1344,6 @@ if st.session_state.selected_molecule:
             exim_rows_html += f"""
             <tr>
               <td style="font-weight:500;">{row_e["entity_name"][:26]}</td>
-              <td>—</td>
               <td>{row_e["grade_e"]}</td>
               <td>{fmt_qty(row_e["sum_qty"])}</td>
               <td>{fmt_inr(row_e["total_val"])}</td>
@@ -1254,7 +1369,6 @@ if st.session_state.selected_molecule:
         <tr class="footer-row">
           <td>EXIM WTD Avg</td>
           <td>—</td>
-          <td>—</td>
           <td>{fmt_qty(total_qty_e)}</td>
           <td>{fmt_inr(total_val_e)}</td>
           <td>₹{wtd_avg_e:,.0f}</td>
@@ -1263,11 +1377,11 @@ if st.session_state.selected_molecule:
         """
 
         _html(f"""
-<div class="pi-card" style="margin-bottom:1.5rem;">
+<div class="pi-card" style="margin-bottom:0.5rem;">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
 <div>
 <div class="pi-section-title">EXIM — Supplier Price &amp; Volume</div>
-<div class="pi-section-sub">supplier/buyer · {period_label} · {uom} · Grade · Sum QTY · Avg PRICE</div>
+<div class="pi-section-sub">supplier/buyer · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
 </div>
 <span class="badge badge-cyan">EXIM</span>
 </div>
@@ -1275,7 +1389,7 @@ if st.session_state.selected_molecule:
 <table class="pi-data-table">
 <thead>
 <tr>
-<th>SUPPLIER</th><th>ORIGIN</th><th>GRADE</th>
+<th>SUPPLIER</th><th>GRADE</th>
 <th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th><th>VS CIPLA</th>
 </tr>
 </thead>
@@ -1284,6 +1398,7 @@ if st.session_state.selected_molecule:
 </div>
 </div>
 """)
+        _pagination_bar(len(exim_agg), _PAGE_SIZE, exim_pg, "exim_table_page", "exim")
 
     st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
 
