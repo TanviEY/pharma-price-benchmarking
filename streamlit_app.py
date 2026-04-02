@@ -773,11 +773,11 @@ if st.session_state.selected_molecule:
         )
     with filt_col_r:
         st.markdown('<div class="pi-month-filter">', unsafe_allow_html=True)
+        _saved_month = st.session_state.get("chart_month_filter", "All Months")
         chart_month = st.selectbox(
             "Filter month",
             available_months_labels,
-            index=available_months_labels.index(st.session_state.get("chart_month_filter", "All Months"))
-                if st.session_state.get("chart_month_filter", "All Months") in available_months_labels else 0,
+            index=available_months_labels.index(_saved_month) if _saved_month in available_months_labels else 0,
             key="chart_month_sel",
             label_visibility="collapsed",
         )
