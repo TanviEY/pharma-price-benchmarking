@@ -1,5 +1,5 @@
 # src/fuzzy_matcher.py
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 from typing import List, Tuple, Optional, Dict
 
 class FuzzyMatcher:
