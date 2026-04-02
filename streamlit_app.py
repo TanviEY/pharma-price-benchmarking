@@ -462,7 +462,11 @@ def _on_mol_enter():
 
 # ─── init objects ─────────────────────────────────────────────────────────────
 file_discovery = FileDiscovery(data_dir="data/raw", molecule_mapping=MOLECULE_MAPPING)
-fuzzy_matcher = FuzzyMatcher(molecule_mapping=MOLECULE_MAPPING, threshold=70)
+try:
+    fuzzy_matcher = FuzzyMatcher(molecule_mapping=MOLECULE_MAPPING, threshold=70)
+except Exception as e:
+    st.error(f"Failed to initialise FuzzyMatcher: {e}")
+    st.stop()
 available_molecules = file_discovery.get_available_molecules()
 
 # ─── NAV BAR ─────────────────────────────────────────────────────────────────
