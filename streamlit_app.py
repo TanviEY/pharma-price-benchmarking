@@ -217,13 +217,60 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   border: none !important; border-bottom: 2px solid var(--border) !important;
   border-radius: 0 !important; box-shadow: none !important;
 }
-.pi-analyse-btn > button {
-  background: linear-gradient(90deg, #0d9488, #3b82f6) !important;
-  color: #ffffff !important; font-weight: 700 !important;
-  border: none !important; border-radius: 8px !important;
-  width: 100% !important; margin-top: 1.55rem !important;
+.pi-search-wrap .pi-analyse-btn > button {
+  background: linear-gradient(90deg, #1d4ed8, #0891b2) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  width: 100% !important;
+  margin-top: 0.75rem !important;
+  padding: 0.55rem 1rem !important;
+  font-size: 0.9rem !important;
+  letter-spacing: 0.3px !important;
 }
-.pi-analyse-btn > button:hover { opacity: 0.9; }
+.pi-search-wrap .pi-analyse-btn > button:hover { opacity: 0.9; }
+
+/* ── SUGGESTION PANEL ── */
+.pi-suggestion-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  margin: 0 1.5rem 0.75rem 1.5rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.pi-suggestion-label {
+  font-size: 0.72rem;
+  color: var(--t3);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.4rem;
+}
+.pi-suggestion-panel .stButton > button {
+  background: var(--subtle) !important;
+  color: var(--t2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 20px !important;
+  padding: 3px 14px !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  margin: 2px !important;
+}
+.pi-suggestion-panel .stButton > button:hover {
+  background: var(--blue-lt) !important;
+  color: var(--blue-dk) !important;
+  border-color: #bfdbfe !important;
+}
+
+/* Month filter row above Section 2 */
+.pi-month-filter [data-baseweb="select"] > div {
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  font-size: 0.78rem !important;
+  background: #ffffff !important;
+}
 
 /* Recent tag pills (Streamlit buttons styled as pills) */
 .pi-tag-row { padding: 0.4rem 1.5rem 0.6rem 1.5rem; }
@@ -404,9 +451,14 @@ for _k, _v in [
     ("selected_molecule", None),
     ("selected_period", "FY 2025–26"),
     ("pipeline_result", None),
+    ("chart_month_filter", "All Months"),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
+
+def _on_mol_enter():
+    st.session_state["_analyse_trigger"] = True
 
 # ─── init objects ─────────────────────────────────────────────────────────────
 file_discovery = FileDiscovery(data_dir="data/raw", molecule_mapping=MOLECULE_MAPPING)
@@ -442,13 +494,14 @@ st.markdown("""
 # Search card (placed below the hero with a clean positive margin)
 with st.container():
     st.markdown('<div class="pi-search-wrap">', unsafe_allow_html=True)
-    sc1, sc2, sc3, sc4 = st.columns([4, 2, 2, 2])
+    sc1, sc2, sc3 = st.columns([4, 2, 2])
     with sc1:
         hero_mol_input = st.text_input(
             "Molecule",
             value=st.session_state.selected_molecule or "",
             placeholder="e.g., Azithromycin…",
             key="hero_mol_input",
+            on_change=_on_mol_enter,
         )
     with sc2:
         period_keys = list(PERIOD_OPTIONS.keys())
@@ -465,14 +518,36 @@ with st.container():
             ["All Origins", "India", "China", "EU / US"],
             key="hero_origin_sel",
         )
-    with sc4:
-        st.markdown('<div class="pi-analyse-btn">', unsafe_allow_html=True)
-        analyse_clicked = st.button("Analyse", key="hero_analyse_btn")
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div class="pi-analyse-btn">', unsafe_allow_html=True)
+    analyse_clicked = st.button("Analyse", key="hero_analyse_btn")
+    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Handle Analyse click
-if analyse_clicked and hero_mol_input.strip():
+# Check Enter-key trigger
+_enter_triggered = st.session_state.pop("_analyse_trigger", False)
+
+# Suggestion panel (shown when there is typed input and no molecule is currently loaded)
+if hero_mol_input.strip() and not st.session_state.selected_molecule:
+    suggestions = fuzzy_matcher.get_suggestions(hero_mol_input.strip(), top_n=5)
+    all_zero = all(s == 0 for _, s in suggestions)
+    if suggestions:
+        st.markdown('<div class="pi-suggestion-panel">', unsafe_allow_html=True)
+        if all_zero:
+            st.markdown('<div class="pi-suggestion-label">No close match · Showing available molecules</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="pi-suggestion-label">Did you mean?</div>', unsafe_allow_html=True)
+        sug_cols = st.columns(len(suggestions))
+        for i, (mol_name, score) in enumerate(suggestions):
+            with sug_cols[i]:
+                if st.button(mol_name.upper(), key=f"sug_{mol_name}_{i}"):
+                    st.session_state.selected_molecule = mol_name
+                    st.session_state.selected_period = hero_period
+                    st.session_state.pipeline_result = None
+                    st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# Handle Analyse click or Enter key
+if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
     top_match = fuzzy_matcher.get_top_match(hero_mol_input.strip())
     if top_match and top_match in available_molecules:
         st.session_state.selected_molecule = top_match
@@ -523,6 +598,11 @@ if st.session_state.selected_molecule:
     grade_series = filtered_df[filtered_df["source"] == "Cipla"]["GRADE_SPEC"]
     grade = grade_series.mode()[0] if len(grade_series) > 0 else "USP"
     period_label = selected_period
+
+    # Build month filter options for Section 2
+    available_months_raw = sorted(filtered_df["yyyymm"].unique())
+    available_months_labels = ["All Months"] + [yyyymm_to_label(m) for m in available_months_raw]
+    month_label_to_yyyymm = {yyyymm_to_label(m): m for m in available_months_raw}
 
     # ── MATERIAL BANNER ──────────────────────────────────────────────────────
     export_csv = filtered_df.to_csv(index=False).encode("utf-8")
@@ -681,9 +761,40 @@ if st.session_state.selected_molecule:
     # ─────────────────────────────────────────────────────────────────────────
     # SECTION 2 — Competitor Benchmark (1.5 : 1 layout)
     # ─────────────────────────────────────────────────────────────────────────
-    # Per-entity WTD avg aggregation
+    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+
+    # Month filter row — sits cleanly above the two Section 2 cards
+    filt_col_l, filt_col_r = st.columns([5, 2])
+    with filt_col_l:
+        st.markdown(
+            '<p style="font-size:0.78rem;color:#64748b;margin:0.5rem 0 0.2rem 0;">'
+            'Benchmark Comparison · Filter by month to drill down</p>',
+            unsafe_allow_html=True
+        )
+    with filt_col_r:
+        st.markdown('<div class="pi-month-filter">', unsafe_allow_html=True)
+        _saved_month = st.session_state.get("chart_month_filter", "All Months")
+        chart_month = st.selectbox(
+            "Filter month",
+            available_months_labels,
+            index=available_months_labels.index(_saved_month) if _saved_month in available_months_labels else 0,
+            key="chart_month_sel",
+            label_visibility="collapsed",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.session_state["chart_month_filter"] = chart_month
+
+    # Apply month filter for Section 2 charts only
+    if chart_month != "All Months" and chart_month in month_label_to_yyyymm:
+        s2_df = filtered_df[filtered_df["yyyymm"] == month_label_to_yyyymm[chart_month]]
+    else:
+        s2_df = filtered_df
+
+    month_context = chart_month if chart_month != "All Months" else period_label
+
+    # Per-entity WTD avg aggregation (uses s2_df for Section 2 only)
     all_ent_agg = (
-        filtered_df.groupby(["entity_name", "source"])
+        s2_df.groupby(["entity_name", "source"])
         .apply(lambda g: pd.Series({
             "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
             "total_qty": g["Sum_of_QTY"].sum(),
@@ -697,13 +808,16 @@ if st.session_state.selected_molecule:
     cipla_bar_price = cipla_ent_row["wtd_price"].mean() if len(cipla_ent_row) > 0 else cipla_price
 
     # Bar chart data
+    s2_market_df = s2_df[s2_df["source"] != "Cipla"]
+    s2_market_price = _safe_wtd_avg(s2_market_df["Sum_of_TOTAL_VALUE"], s2_market_df["Sum_of_QTY"])
+
     bar_items = []
     for _, row in non_cipla_rows.iterrows():
         bar_items.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
     if len(cipla_ent_row) > 0:
         bar_items.append({"entity": "★ Cipla", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()})
-    if market_price > 0:
-        bar_items.append({"entity": "EXIM Avg", "price": market_price, "type": "market", "qty": market_df_f["Sum_of_QTY"].sum()})
+    if s2_market_price > 0:
+        bar_items.append({"entity": "EXIM Avg", "price": s2_market_price, "type": "market", "qty": s2_market_df["Sum_of_QTY"].sum()})
 
     bar_items_sorted = sorted(bar_items, key=lambda x: x["price"])
 
@@ -718,7 +832,6 @@ if st.session_state.selected_molecule:
     else:
         min_p = max_p = 0
 
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
     s2_left, s2_right = st.columns([3, 2])
 
     with s2_left:
@@ -726,7 +839,7 @@ if st.session_state.selected_molecule:
         bar_html = f"""
         <div class="pi-card" style="margin-bottom:1.5rem;">
           <div class="pi-section-title">WTD Average Price Comparison (₹/{uom})</div>
-          <div class="pi-section-sub">Cipla vs competitors · EXIM trade data · {period_label}</div>
+          <div class="pi-section-sub">Cipla vs competitors · {month_context}</div>
           <div style="padding:0.2rem 0;">
         """
         for r in bar_items_sorted:
@@ -843,7 +956,7 @@ if st.session_state.selected_molecule:
         comp_table = f"""
         <div class="pi-card" style="margin-bottom:1.5rem;">
           <div class="pi-section-title">Price &amp; Volume Summary</div>
-          <div class="pi-section-sub">Per entity · WTD average price · {period_label}</div>
+          <div class="pi-section-sub">Per entity · WTD average price · {month_context}</div>
           <div style="overflow-x:auto;">
           <table class="pi-comp-table">
             <thead>
