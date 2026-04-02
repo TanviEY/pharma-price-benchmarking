@@ -1,54 +1,65 @@
 # pipeline.py
-import os
 import pandas as pd
 from pathlib import Path
-from src.file_discovery import FileDiscovery 
-from src.data_loader import DataLoader 
-from src.data_processor import DataProcessor
+from src.backend import (
+    discover_molecule_files,
+    discover_cipla_file,
+    load_multiple_files,
+    load_cipla_grn,
+    prepare_molecule_data,
+    prepare_cipla_data,
+    calculate_cipla_baseline,
+    apply_outlier_filters,
+    aggregate_supplier,
+    aggregate_buyer,
+    aggregate_cipla,
+)
 from src.settings import MOLECULE_MAPPING
 
+_DATA_DIR = "data/raw"
 
-def run_processing_pipeline(molecule_name, file_discovery):
+
+def run_processing_pipeline(molecule_name: str, data_dir: str = _DATA_DIR) -> dict:
     """
-    Universal pipeline for any molecule
+    Universal pipeline for any molecule.
     """
     try:
         # Step 1: Discover files
-        mol_files = file_discovery.discover_molecule_files(molecule_name)
-        cipla_file = file_discovery.discover_cipla_file()
+        mol_files = discover_molecule_files(data_dir, MOLECULE_MAPPING, molecule_name)
+        cipla_file = discover_cipla_file(data_dir)
 
         if not mol_files:
             return {
                 'status': 'failed',
-                'errors': [f'No data files found for molecule: {molecule_name}']
+                'errors': [f'No data files found for molecule: {molecule_name}'],
             }
         if not cipla_file:
             return {
                 'status': 'failed',
-                'errors': ['Cipla GRN file not found']
+                'errors': ['Cipla GRN file not found'],
             }
 
         # Step 2: Load data
-        molecule_df = DataLoader.load_multiple_files(mol_files)
+        molecule_df = load_multiple_files(mol_files)
         api_filter = MOLECULE_MAPPING['molecules'][molecule_name]['cipla_api_filter']
-        cipla_df = DataLoader.load_cipla_grn(cipla_file, api_filter)
+        cipla_df = load_cipla_grn(cipla_file, api_filter)
 
         raw_record_count = len(molecule_df)
 
         # Step 3: Prepare data
-        molecule_df = DataProcessor.prepare_molecule_data(molecule_df)
-        cipla_df = DataProcessor.prepare_cipla_data(cipla_df)
+        molecule_df = prepare_molecule_data(molecule_df)
+        cipla_df = prepare_cipla_data(cipla_df)
 
         # Step 4: Calculate baselines
-        cipla_baseline = DataProcessor.calculate_cipla_baseline(cipla_df)
+        cipla_baseline = calculate_cipla_baseline(cipla_df)
 
         # Step 5: Filter outliers (returns tuple of (df, stats))
-        molecule_df_filtered, filter_stats = DataProcessor.apply_outlier_filters(molecule_df, cipla_baseline)
+        molecule_df_filtered, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
 
         # Step 6: Aggregate
-        supplier_agg = DataProcessor.aggregate_supplier(molecule_df_filtered)
-        buyer_agg = DataProcessor.aggregate_buyer(molecule_df_filtered)
-        cipla_agg = DataProcessor.aggregate_cipla(cipla_df, molecule_name)
+        supplier_agg = aggregate_supplier(molecule_df_filtered)
+        buyer_agg = aggregate_buyer(molecule_df_filtered)
+        cipla_agg = aggregate_cipla(cipla_df, molecule_name)
 
         # Step 7: Build consolidated DataFrame
         shared_cols = ['entity_name', 'yyyymm', 'uom', 'GRADE_SPEC',
@@ -58,7 +69,7 @@ def run_processing_pipeline(molecule_name, file_discovery):
         cipla_agg['entity_name'] = cipla_agg['api']
         consolidated = pd.concat(
             [supplier_agg[shared_cols], buyer_agg[shared_cols], cipla_agg[shared_cols]],
-            ignore_index=True
+            ignore_index=True,
         )
 
         # Step 8: Save outputs
@@ -75,18 +86,18 @@ def run_processing_pipeline(molecule_name, file_discovery):
                 'files_loaded': mol_files,
                 'raw_record_count': raw_record_count,
                 'filter_stats': filter_stats,
-                'cipla_baseline': cipla_baseline
+                'cipla_baseline': cipla_baseline,
             },
             'data': {
                 'supplier': supplier_agg,
                 'buyer': buyer_agg,
                 'cipla': cipla_agg,
-                'consolidated': consolidated
-            }
+                'consolidated': consolidated,
+            },
         }
 
     except Exception as e:
         return {
             'status': 'failed',
-            'errors': [str(e)]
+            'errors': [str(e)],
         }

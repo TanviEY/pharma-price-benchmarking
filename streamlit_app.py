@@ -7,10 +7,8 @@ import plotly.graph_objects as go
 import numpy as np
 from pathlib import Path
 
-from src.file_discovery import FileDiscovery
-from src.fuzzy_matcher import FuzzyMatcher
+from src.backend import get_suggestions, get_top_match, get_available_molecules
 from src.pipeline import run_processing_pipeline
-from src.utils import Utils
 from src.settings import MOLECULE_MAPPING
 
 
@@ -471,14 +469,13 @@ for _k, _v in [
 def _on_mol_enter():
     st.session_state["_analyse_trigger"] = True
 
-# ─── init objects ─────────────────────────────────────────────────────────────
-file_discovery = FileDiscovery(data_dir="data/raw", molecule_mapping=MOLECULE_MAPPING)
+# ─── init ─────────────────────────────────────────────────────────────────────
+_DATA_DIR = "data/raw"
 try:
-    fuzzy_matcher = FuzzyMatcher(molecule_mapping=MOLECULE_MAPPING, threshold=70)
+    available_molecules = get_available_molecules(_DATA_DIR, MOLECULE_MAPPING)
 except Exception as e:
-    st.error(f"Failed to initialise FuzzyMatcher: {e}")
+    st.error(f"Failed to load molecule list: {e}")
     st.stop()
-available_molecules = file_discovery.get_available_molecules()
 
 # ─── NAV BAR ─────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -529,7 +526,7 @@ _enter_triggered = st.session_state.pop("_analyse_trigger", False)
 
 # Suggestion panel (shown when there is typed input and no molecule is currently loaded)
 if hero_mol_input.strip() and not st.session_state.selected_molecule:
-    suggestions = fuzzy_matcher.get_suggestions(hero_mol_input.strip(), top_n=5)
+    suggestions = get_suggestions(MOLECULE_MAPPING, hero_mol_input.strip(), top_n=5)
     all_zero = all(s == 0 for _, s in suggestions)
     if suggestions:
         st.markdown('<div class="pi-suggestion-panel">', unsafe_allow_html=True)
@@ -548,7 +545,7 @@ if hero_mol_input.strip() and not st.session_state.selected_molecule:
 
 # Handle Analyse click or Enter key
 if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
-    top_match = fuzzy_matcher.get_top_match(hero_mol_input.strip())
+    top_match = get_top_match(MOLECULE_MAPPING, hero_mol_input.strip())
     if top_match and top_match in MOLECULE_MAPPING["molecules"]:
         st.session_state.selected_molecule = top_match
         st.session_state.pipeline_result = None
@@ -566,7 +563,7 @@ if st.session_state.selected_molecule:
 
     # ── run pipeline ──────────────────────────────────────────────────────────
     with st.spinner(f"Loading data for {selected_mol.upper()}…"):
-        result = run_processing_pipeline(selected_mol, file_discovery)
+        result = run_processing_pipeline(selected_mol)
 
     if result["status"] == "failed":
         st.markdown(
