@@ -122,8 +122,12 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
 
     # Build outlier df: rows in original that are NOT in filtered
     outlier_df = original_df[~original_df.index.isin(df.index)].copy()
-    # Add reason columns for validation
-    outlier_df['unit_price'] = outlier_df['TOTAL_VALUE'] / outlier_df['QTY']
+    # Add reason columns for validation (guard against zero QTY)
+    outlier_df['unit_price'] = np.where(
+        outlier_df['QTY'] > 0,
+        outlier_df['TOTAL_VALUE'] / outlier_df['QTY'],
+        0.0
+    )
     outlier_df['outlier_reason_qty'] = outlier_df['QTY'] < min_qty
     outlier_df['outlier_reason_price'] = ~((outlier_df['unit_price'] >= price_lower) & (outlier_df['unit_price'] <= price_upper))
 
