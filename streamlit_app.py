@@ -1226,27 +1226,16 @@ if st.session_state.selected_molecule:
             (cipla_full_df["yyyymm"] >= from_yyyymm) & (cipla_full_df["yyyymm"] <= to_yyyymm)
         ]
 
-        cipla_monthly = (
-            cipla_filtered_full.groupby("yyyymm")
-            .apply(lambda g: pd.Series({
-                "uom_m":     g["uom"].mode()[0] if len(g) > 0 else uom,
-                "grade_m":   g["GRADE_SPEC"].mode()[0] if len(g) > 0 else grade,
-                "sum_qty":   g["Sum_of_QTY"].sum(),
-                "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
-                "avg_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
-            }))
-            .reset_index()
-            .sort_values("yyyymm")
-        )
+        cipla_sorted = cipla_filtered_full.sort_values("yyyymm").reset_index(drop=True)
 
         # Pagination
         cipla_pg = st.session_state.get("cipla_table_page", 1)
         cip_start = (cipla_pg - 1) * _PAGE_SIZE
         cip_end = cip_start + _PAGE_SIZE
-        cipla_monthly_page = cipla_monthly.iloc[cip_start:cip_end]
+        cipla_monthly_page = cipla_sorted.iloc[cip_start:cip_end]
 
-        max_qty_idx = cipla_monthly_page["sum_qty"].idxmax() if len(cipla_monthly_page) > 0 else None
-        min_qty_idx = cipla_monthly_page["sum_qty"].idxmin() if len(cipla_monthly_page) > 1 else None
+        max_qty_idx = cipla_monthly_page["Sum_of_QTY"].idxmax() if len(cipla_monthly_page) > 0 else None
+        min_qty_idx = cipla_monthly_page["Sum_of_QTY"].idxmin() if len(cipla_monthly_page) > 1 else None
 
         cip_rows_html = ""
         for idx_r, row_r in cipla_monthly_page.iterrows():
@@ -1258,25 +1247,23 @@ if st.session_state.selected_molecule:
             cip_rows_html += f"""
             <tr>
               <td>{yyyymm_to_label(row_r["yyyymm"])}</td>
-              <td>{row_r["uom_m"]}</td>
-              <td>{row_r["grade_m"]}</td>
-              <td {qty_style}>{fmt_qty(row_r["sum_qty"])}</td>
-              <td>{fmt_inr(row_r["total_val"])}</td>
-              <td style="color:#1d4ed8;font-weight:700;">₹{row_r["avg_price"]:,.0f}</td>
+              <td>{row_r["uom"]}</td>
+              <td>{row_r["GRADE_SPEC"]}</td>
+              <td {qty_style}>{fmt_qty(row_r["Sum_of_QTY"])}</td>
+              <td>{fmt_inr(row_r["Sum_of_TOTAL_VALUE"])}</td>
+              <td style="color:#1d4ed8;font-weight:700;">₹{row_r["Avg_PRICE"]:,.0f}</td>
             </tr>
             """
 
         total_qty_c = cipla_filtered_full["Sum_of_QTY"].sum()
         total_val_c = cipla_filtered_full["Sum_of_TOTAL_VALUE"].sum()
         wtd_avg_c = _safe_wtd_avg(cipla_filtered_full["Sum_of_TOTAL_VALUE"], cipla_filtered_full["Sum_of_QTY"])
-        grade_c = cipla_filtered_full["GRADE_SPEC"].mode()[0] if len(cipla_filtered_full) > 0 else grade
-        uom_c = cipla_filtered_full["uom"].mode()[0] if len(cipla_filtered_full) > 0 else uom
 
         cip_rows_html += f"""
         <tr class="footer-row">
           <td>WTD Avg</td>
-          <td>{uom_c}</td>
-          <td>{grade_c}</td>
+          <td>—</td>
+          <td>—</td>
           <td>{fmt_qty(total_qty_c)}</td>
           <td>{fmt_inr(total_val_c)}</td>
           <td style="color:#1d4ed8;font-weight:700;">₹{wtd_avg_c:,.0f}</td>
@@ -1288,7 +1275,7 @@ if st.session_state.selected_molecule:
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
 <div>
 <div class="pi-section-title">Cipla — Monthly Price &amp; Volume</div>
-<div class="pi-section-sub">api = {selected_mol.upper()} · {from_sel} to {to_sel} · {uom_c} · {grade_c} · Sum QTY · Avg PRICE</div>
+<div class="pi-section-sub">api = {selected_mol.upper()} · {from_sel} to {to_sel} · per grade &amp; UOM · Sum QTY · Avg PRICE</div>
 </div>
 <span class="badge badge-blue">ERP</span>
 </div>
@@ -1305,7 +1292,7 @@ if st.session_state.selected_molecule:
 </div>
 </div>
 """)
-        _pagination_bar(len(cipla_monthly), _PAGE_SIZE, cipla_pg, "cipla_table_page", "cipla")
+        _pagination_bar(len(cipla_sorted), _PAGE_SIZE, cipla_pg, "cipla_table_page", "cipla")
 
     with t4_r:
         # EXIM Supplier table — sort by qty descending, no Origin column
