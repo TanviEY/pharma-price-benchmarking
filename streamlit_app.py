@@ -10,7 +10,7 @@ from pathlib import Path
 
 try:
     import google.generativeai as genai
-    _GEMINI_API_KEY = "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU"
+    _GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU") if hasattr(st, "secrets") else "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU"
     genai.configure(api_key=_GEMINI_API_KEY)
     _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
     _GEMINI_AVAILABLE = True
@@ -614,8 +614,8 @@ if _show_suggestions:
         sug_cols = st.columns(len(suggestions))
         for i, (mol_name, score) in enumerate(suggestions):
             with sug_cols[i]:
-                badge_label = f"{mol_name.upper()} {score}%" if score > 0 else mol_name.upper()
-                if st.button(badge_label, key=f"sug_{mol_name}_{i}"):
+                suggestion_button_label = f"{mol_name.upper()} {score}%" if score > 0 else mol_name.upper()
+                if st.button(suggestion_button_label, key=f"sug_{mol_name}_{i}"):
                     st.session_state.selected_molecule = mol_name
                     st.session_state.pipeline_result = None
                     st.session_state.filters_applied = False
@@ -885,17 +885,15 @@ if st.session_state.selected_molecule:
 
         if len(outlier_df_cached) > 0:
             st.markdown("**Outlier Details** — rows removed and reasons:")
-            # Build reason string per row
-            _price_lower = cipla_baseline_cached["avg_price"] * 0.70
-            _price_upper = cipla_baseline_cached["avg_price"] * 1.30
-            _exim_avg_qty = (raw_ct / max(1, len(meta.get("files_loaded", [1])))) * 0.10  # approximation
-            # Recompute min_qty for display
-            _min_qty_display = outlier_df_cached["QTY"].mean() * 0.10 if len(outlier_df_cached) > 0 else 0
+            # Use actual thresholds stored by apply_outlier_filters
+            _min_qty_thr = filter_stats_cached.get("min_qty_threshold", 0.0)
+            _price_lower = filter_stats_cached.get("price_lower", cipla_baseline_cached["avg_price"] * 0.70)
+            _price_upper = filter_stats_cached.get("price_upper", cipla_baseline_cached["avg_price"] * 1.30)
 
             def _outlier_reason(row):
                 reasons = []
                 if row.get("outlier_reason_qty", False):
-                    reasons.append(f"Low Quantity (QTY < {_min_qty_display:.0f})")
+                    reasons.append(f"Low Quantity (QTY < {_min_qty_thr:.0f})")
                 if row.get("outlier_reason_price", False):
                     reasons.append(f"Price Out of Range (₹{_price_lower:.0f}–₹{_price_upper:.0f})")
                 return " | ".join(reasons) if reasons else "Unknown"
