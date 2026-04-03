@@ -131,7 +131,10 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
         'original_count': original_count,
         'filtered_count': filtered_count,
         'removed_count': removed,
-        'removal_percentage': (removed / original_count * 100) if original_count > 0 else 0
+        'removal_percentage': (removed / original_count * 100) if original_count > 0 else 0,
+        'min_qty_threshold': min_qty,
+        'price_lower': price_lower,
+        'price_upper': price_upper,
     }
 
 

@@ -1,11 +1,22 @@
 # streamlit_app.py
 import calendar
 import math
+import time
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from pathlib import Path
+
+try:
+    import google.generativeai as genai
+    _GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU") if hasattr(st, "secrets") else "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU"
+    genai.configure(api_key=_GEMINI_API_KEY)
+    _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+    _GEMINI_AVAILABLE = True
+except Exception:
+    _GEMINI_AVAILABLE = False
+    _gemini_model = None
 
 from backend import (
     MOLECULE_MAPPING,
@@ -58,6 +69,23 @@ def fmt_inr(value: float) -> str:
 
 def fmt_qty(value: float) -> str:
     return f"{int(value):,}"
+
+
+def _gemini_narrate(step_description: str, step_result_summary: str) -> str:
+    """Call Gemini to narrate a pipeline step. Returns empty string on failure."""
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        return ""
+    try:
+        prompt = (
+            "You are a data processing agent. Narrate this step in ONE sentence "
+            "(max 20 words), present tense, no technical jargon:\n"
+            f"Step: {step_description}\n"
+            f"Result: {step_result_summary}"
+        )
+        response = _gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception:
+        return ""
 
 
 AVATAR_COLORS = [
@@ -455,6 +483,41 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 
 /* page padding */
 .pi-page-body { padding: 0 1.5rem; }
+
+/* ── AGENT LOG BOX ── */
+.pi-agent-log {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 1.5rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.82rem;
+  max-height: 320px;
+  overflow-y: auto;
+  line-height: 1.7;
+}
+.pi-log-step-ok   { color: #3fb950; }
+.pi-log-step-warn { color: #d29922; }
+.pi-log-step-err  { color: #f85149; }
+.pi-log-narration { color: #8b949e; font-style: italic; margin-left: 1.5rem; }
+.pi-log-header    { color: #58a6ff; font-weight: 700; margin-bottom: 0.4rem; }
+
+/* ── FILTER PANEL ── */
+.pi-filter-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  padding: 1.2rem 1.5rem 1rem 1.5rem;
+  margin: 1rem 1.5rem;
+}
+.pi-filter-title {
+  font-size: 0.95rem; font-weight: 700; color: var(--t1); margin-bottom: 0.25rem;
+}
+.pi-filter-note {
+  font-size: 0.72rem; color: var(--t3); margin-bottom: 0.8rem; font-style: italic;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -462,6 +525,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 for _k, _v in [
     ("selected_molecule", None),
     ("pipeline_result", None),
+    ("pipeline_clean_time", None),
     ("chart_month_filter", "All Months"),
     ("bar_view_mode", "Top 25% by Volume"),
     ("bar_page", 1),
@@ -470,6 +534,11 @@ for _k, _v in [
     ("exim_table_page", 1),
     ("cipla_from_month", None),
     ("cipla_to_month", None),
+    ("filter_from_month", None),
+    ("filter_to_month", None),
+    ("filter_uoms", None),
+    ("filter_grades", None),
+    ("filters_applied", False),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -528,8 +597,12 @@ with st.container():
 # Check Enter-key trigger
 _enter_triggered = st.session_state.pop("_analyse_trigger", False)
 
-# Suggestion panel (shown when there is typed input and no molecule is currently loaded)
-if hero_mol_input.strip() and not st.session_state.selected_molecule:
+# Suggestion panel (shown when there is typed input that differs from selected molecule)
+_show_suggestions = (
+    hero_mol_input.strip()
+    and hero_mol_input.strip().lower() != (st.session_state.selected_molecule or "").lower()
+)
+if _show_suggestions:
     suggestions = get_suggestions(hero_mol_input.strip(), MOLECULE_MAPPING, top_n=5)
     all_zero = all(s == 0 for _, s in suggestions)
     if suggestions:
@@ -541,9 +614,11 @@ if hero_mol_input.strip() and not st.session_state.selected_molecule:
         sug_cols = st.columns(len(suggestions))
         for i, (mol_name, score) in enumerate(suggestions):
             with sug_cols[i]:
-                if st.button(mol_name.upper(), key=f"sug_{mol_name}_{i}"):
+                suggestion_button_label = f"{mol_name.upper()} {score}%" if score > 0 else mol_name.upper()
+                if st.button(suggestion_button_label, key=f"sug_{mol_name}_{i}"):
                     st.session_state.selected_molecule = mol_name
                     st.session_state.pipeline_result = None
+                    st.session_state.filters_applied = False
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -553,6 +628,7 @@ if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
     if top_match and top_match in MOLECULE_MAPPING["molecules"]:
         st.session_state.selected_molecule = top_match
         st.session_state.pipeline_result = None
+        st.session_state.filters_applied = False
         st.rerun()
     else:
         st.markdown(
@@ -565,19 +641,215 @@ if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
 if st.session_state.selected_molecule:
     selected_mol = st.session_state.selected_molecule
 
-    # ── run pipeline ──────────────────────────────────────────────────────────
-    with st.spinner(f"Loading data for {selected_mol.upper()}…"):
-        result = run_processing_pipeline(selected_mol, "data/raw")
+    # ── run pipeline (step-by-step with Gemini narration) ─────────────────────
+    if st.session_state.pipeline_result is None:
+        _log_lines: list = []
+        _log_placeholder = st.empty()
 
-    if result["status"] == "failed":
+        def _render_log(lines):
+            inner = "\n".join(lines)
+            _log_placeholder.markdown(
+                f'<div class="pi-agent-log">'
+                f'<div class="pi-log-header">⚙ PharmaIntel · Agent Processing — {selected_mol.upper()}</div>'
+                f'{inner}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        _t0 = time.time()
+
+        try:
+            # ── Step 1: Discover files ─────────────────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 1/8 — Discovering files…</span>')
+            _render_log(_log_lines)
+            mol_files = discover_molecule_files(selected_mol, "data/raw", MOLECULE_MAPPING)
+            cipla_file = discover_cipla_file("data/raw")
+            if not mol_files:
+                st.markdown(
+                    f'<div class="pi-info-banner">❌ No data files found for <strong>{selected_mol}</strong>.</div>',
+                    unsafe_allow_html=True,
+                )
+                st.stop()
+            if not cipla_file:
+                st.markdown(
+                    '<div class="pi-info-banner">❌ Cipla GRN file not found.</div>',
+                    unsafe_allow_html=True,
+                )
+                st.stop()
+            _s1_result = f"{len(mol_files)} EXIM file(s) found, Cipla GRN located"
+            _narr1 = _gemini_narrate(
+                f"Discovering files for {selected_mol}",
+                _s1_result,
+            )
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 1 done — {_s1_result}</span>')
+            if _narr1:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr1}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 2: Load data ──────────────────────────────────────────────
+            _log_lines.append(f'<span class="pi-log-step-ok">▶ Step 2/8 — Loading {len(mol_files)} EXIM files + Cipla GRN file…</span>')
+            _render_log(_log_lines)
+            molecule_df_raw = load_multiple_files(mol_files)
+            api_filter = MOLECULE_MAPPING["molecules"][selected_mol]["cipla_api_filter"]
+            cipla_df_raw = load_cipla_grn(cipla_file, api_filter)
+            raw_record_count = len(molecule_df_raw)
+            _s2_result = f"{raw_record_count} raw EXIM rows + {len(cipla_df_raw)} Cipla rows loaded"
+            _narr2 = _gemini_narrate(
+                f"Loading {len(mol_files)} EXIM files + Cipla GRN file",
+                _s2_result,
+            )
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 2 done — {_s2_result}</span>')
+            if _narr2:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr2}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 3: Prepare molecule data ──────────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 3/8 — Preparing &amp; cleaning molecule data…</span>')
+            _render_log(_log_lines)
+            molecule_df = prepare_molecule_data(molecule_df_raw)
+            after_clean_count = len(molecule_df)
+            _s3_result = f"{raw_record_count - after_clean_count} rows dropped (nulls/bad dates), {after_clean_count} remaining"
+            _narr3 = _gemini_narrate(
+                "Preparing & cleaning molecule data (drop nulls, parse dates, extract grade spec)",
+                _s3_result,
+            )
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 3 done — {_s3_result}</span>')
+            if _narr3:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr3}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 4: Prepare Cipla data ─────────────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 4/8 — Preparing Cipla data…</span>')
+            _render_log(_log_lines)
+            cipla_df = prepare_cipla_data(cipla_df_raw)
+            _s4_result = f"{len(cipla_df)} Cipla rows cleaned and ready"
+            _narr4 = _gemini_narrate("Preparing Cipla data", _s4_result)
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 4 done — {_s4_result}</span>')
+            if _narr4:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr4}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 5: Calculate Cipla baseline ──────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 5/8 — Calculating Cipla price baseline…</span>')
+            _render_log(_log_lines)
+            cipla_baseline = calculate_cipla_baseline(cipla_df)
+            _avg_price = cipla_baseline["avg_price"]
+            _s5_result = f"avg price ₹{_avg_price:,.2f}/unit, {cipla_baseline['total_records']} records"
+            _narr5 = _gemini_narrate(
+                f"Calculating Cipla price baseline (avg price: ₹{_avg_price:.2f}/unit)",
+                _s5_result,
+            )
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 5 done — {_s5_result}</span>')
+            if _narr5:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr5}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 6: Apply outlier filters ──────────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 6/8 — Applying outlier filters (qty threshold + price ±30%)…</span>')
+            _render_log(_log_lines)
+            molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
+            _removed = filter_stats["removed_count"]
+            _pct = filter_stats["removal_percentage"]
+            _s6_result = f"{_removed} outlier rows removed ({_pct:.1f}%), {filter_stats['filtered_count']} rows kept"
+            _narr6 = _gemini_narrate(
+                "Applying outlier filters (qty threshold + price ±30%)",
+                _s6_result,
+            )
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 6 done — {_s6_result}</span>')
+            if _narr6:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr6}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 7: Aggregate ──────────────────────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 7/8 — Aggregating by Supplier, Buyer, Cipla…</span>')
+            _render_log(_log_lines)
+            supplier_agg = aggregate_supplier(molecule_df_filtered)
+            buyer_agg = aggregate_buyer(molecule_df_filtered)
+            cipla_agg = aggregate_cipla(cipla_df, selected_mol)
+            _s7_result = (
+                f"{len(supplier_agg)} supplier rows, "
+                f"{len(buyer_agg)} buyer rows, "
+                f"{len(cipla_agg)} Cipla rows"
+            )
+            _narr7 = _gemini_narrate("Aggregating by Supplier, Buyer, Cipla", _s7_result)
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 7 done — {_s7_result}</span>')
+            if _narr7:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr7}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 8: Build consolidated dataset ────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 8/8 — Building consolidated dataset…</span>')
+            _render_log(_log_lines)
+            shared_cols = [
+                "entity_name", "yyyymm", "uom", "GRADE_SPEC",
+                "Sum_of_QTY", "Sum_of_TOTAL_VALUE", "Avg_PRICE", "source",
+            ]
+            supplier_agg["entity_name"] = supplier_agg["supplier"]
+            buyer_agg["entity_name"] = buyer_agg["buyer"]
+            cipla_agg["entity_name"] = cipla_agg["api"]
+            consolidated = pd.concat(
+                [supplier_agg[shared_cols], buyer_agg[shared_cols], cipla_agg[shared_cols]],
+                ignore_index=True,
+            )
+            # Save processed files
+            _proc_dir = Path("data/processed")
+            _proc_dir.mkdir(parents=True, exist_ok=True)
+            supplier_agg.to_csv(_proc_dir / f"{selected_mol}_supplier.csv", index=False)
+            buyer_agg.to_csv(_proc_dir / f"{selected_mol}_buyer.csv", index=False)
+            cipla_agg.to_csv(_proc_dir / f"cipla_{selected_mol}.csv", index=False)
+            outlier_df.to_csv(_proc_dir / f"outlier_{selected_mol}.csv", index=False)
+
+            _t1 = time.time()
+            _clean_time = _t1 - _t0
+            _s8_result = f"{len(consolidated)} consolidated rows ready in {_clean_time:.1f}s"
+            _narr8 = _gemini_narrate("Building consolidated dataset", _s8_result)
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 8 done — {_s8_result}</span>')
+            if _narr8:
+                _log_lines.append(f'<span class="pi-log-narration">💬 {_narr8}</span>')
+            _log_lines.append(f'<span class="pi-log-step-ok" style="font-weight:700;">✅ Pipeline complete — {len(consolidated)} records ready for analysis</span>')
+            _render_log(_log_lines)
+
+            # Cache the result
+            st.session_state.pipeline_result = {
+                "status": "success",
+                "errors": [],
+                "metadata": {
+                    "files_loaded": mol_files,
+                    "raw_record_count": raw_record_count,
+                    "after_clean_count": after_clean_count,
+                    "filter_stats": filter_stats,
+                    "cipla_baseline": cipla_baseline,
+                },
+                "data": {
+                    "supplier": supplier_agg,
+                    "buyer": buyer_agg,
+                    "cipla": cipla_agg,
+                    "consolidated": consolidated,
+                    "outlier": outlier_df,
+                },
+            }
+            st.session_state.pipeline_clean_time = _clean_time
+
+        except Exception as _exc:
+            _log_lines.append(f'<span class="pi-log-step-err">❌ Pipeline error: {_exc}</span>')
+            _render_log(_log_lines)
+            st.stop()
+
+    # ── load cached result ─────────────────────────────────────────────────────
+    result = st.session_state.pipeline_result
+    if result is None or result["status"] == "failed":
         st.markdown(
             f'<div class="pi-info-banner">❌ Pipeline failed: '
-            f'{", ".join(result["errors"])}</div>',
+            f'{", ".join((result or {}).get("errors", ["Unknown error"]))}</div>',
             unsafe_allow_html=True,
         )
         st.stop()
 
     consolidated_df = result["data"]["consolidated"]
+    outlier_df_cached = result["data"]["outlier"]
+    meta = result["metadata"]
+    filter_stats_cached = meta["filter_stats"]
+    cipla_baseline_cached = meta["cipla_baseline"]
 
     # Metadata (derived from full consolidated_df)
     mol_cfg = MOLECULE_MAPPING["molecules"].get(selected_mol, {})
@@ -586,10 +858,170 @@ if st.session_state.selected_molecule:
     grade_series = consolidated_df[consolidated_df["source"] == "Cipla"]["GRADE_SPEC"]
     grade = grade_series.mode()[0] if len(grade_series) > 0 else "USP"
 
-    # Build global month filter options from full consolidated_df
+    # Build month/UOM/grade options from full consolidated_df
     available_months_raw = sorted(consolidated_df["yyyymm"].unique())
-    available_months_labels = ["All Months"] + [yyyymm_to_label(m) for m in available_months_raw]
+    available_months_labels = [yyyymm_to_label(m) for m in available_months_raw]
     month_label_to_yyyymm = {yyyymm_to_label(m): m for m in available_months_raw}
+
+    # ── CLEANING SUMMARY EXPANDER ──────────────────────────────────────────────
+    with st.expander("📋 Cleaning Summary", expanded=False):
+        _ec1, _ec2, _ec3, _ec4 = st.columns(4)
+        raw_ct = meta.get("raw_record_count", 0)
+        clean_ct = meta.get("after_clean_count", raw_ct)
+        final_ct = filter_stats_cached.get("filtered_count", clean_ct)
+        removed_pct = filter_stats_cached.get("removal_percentage", 0.0)
+        _clean_t = st.session_state.get("pipeline_clean_time") or 0.0
+        with _ec1:
+            st.metric("Raw Records", f"{raw_ct:,}")
+        with _ec2:
+            st.metric("After Null/Date Cleaning", f"{clean_ct:,}")
+        with _ec3:
+            st.metric("After Outlier Removal", f"{final_ct:,}")
+        with _ec4:
+            st.metric("% Removed (Outliers)", f"{removed_pct:.1f}%")
+
+        st.caption(f"⏱ Pipeline completed in **{_clean_t:.2f} seconds**")
+
+        if len(outlier_df_cached) > 0:
+            st.markdown("**Outlier Details** — rows removed and reasons:")
+            # Use actual thresholds stored by apply_outlier_filters
+            _min_qty_thr = filter_stats_cached.get("min_qty_threshold", 0.0)
+            _price_lower = filter_stats_cached.get("price_lower", cipla_baseline_cached["avg_price"] * 0.70)
+            _price_upper = filter_stats_cached.get("price_upper", cipla_baseline_cached["avg_price"] * 1.30)
+
+            def _outlier_reason(row):
+                reasons = []
+                if row.get("outlier_reason_qty", False):
+                    reasons.append(f"Low Quantity (QTY < {_min_qty_thr:.0f})")
+                if row.get("outlier_reason_price", False):
+                    reasons.append(f"Price Out of Range (₹{_price_lower:.0f}–₹{_price_upper:.0f})")
+                return " | ".join(reasons) if reasons else "Unknown"
+
+            outlier_display = outlier_df_cached.copy()
+            outlier_display["Reason"] = outlier_display.apply(_outlier_reason, axis=1)
+
+            # Find entity name column
+            _ent_col = None
+            for _c in ["Supp_Name", "IMPORTER", "entity_name"]:
+                if _c in outlier_display.columns:
+                    _ent_col = _c
+                    break
+
+            _disp_cols = {}
+            if _ent_col:
+                _disp_cols[_ent_col] = "Supplier / Importer"
+            if "yyyymm" in outlier_display.columns:
+                _disp_cols["yyyymm"] = "Date (yyyymm)"
+            if "QTY" in outlier_display.columns:
+                _disp_cols["QTY"] = "QTY"
+            if "unit_price" in outlier_display.columns:
+                _disp_cols["unit_price"] = "Unit Price (₹)"
+            _disp_cols["Reason"] = "Reason"
+
+            _show_cols = [c for c in _disp_cols if c in outlier_display.columns]
+            _show_df = (
+                outlier_display[_show_cols]
+                .rename(columns=_disp_cols)
+                .reset_index(drop=False)
+                .rename(columns={"index": "Row Index"})
+            )
+            st.dataframe(_show_df, use_container_width=True, hide_index=True)
+        else:
+            st.success("✅ No outliers detected.")
+
+    # ── FILTER PANEL ──────────────────────────────────────────────────────────
+    st.markdown('<div class="pi-filter-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="pi-filter-title">🔎 Configure Analysis Filters</div>', unsafe_allow_html=True)
+    st.markdown('<div class="pi-filter-note">Pipeline cached — changing filters does not re-run data processing.</div>', unsafe_allow_html=True)
+
+    _all_uoms = sorted(consolidated_df["uom"].dropna().unique().tolist())
+    _all_grades = sorted(consolidated_df["GRADE_SPEC"].dropna().unique().tolist())
+
+    # Defaults: initialise from session_state or use full range
+    _def_from = st.session_state.get("filter_from_month")
+    _def_to = st.session_state.get("filter_to_month")
+    _def_uoms = st.session_state.get("filter_uoms")
+    _def_grades = st.session_state.get("filter_grades")
+
+    if _def_from not in available_months_labels or _def_from is None:
+        _def_from = available_months_labels[0] if available_months_labels else None
+    if _def_to not in available_months_labels or _def_to is None:
+        _def_to = available_months_labels[-1] if available_months_labels else None
+    if _def_uoms is None:
+        _def_uoms = _all_uoms
+    if _def_grades is None:
+        _def_grades = _all_grades
+
+    fp1, fp2, fp3, fp4 = st.columns([2, 2, 3, 3])
+    with fp1:
+        _from_sel = st.selectbox(
+            "From Month",
+            available_months_labels,
+            index=available_months_labels.index(_def_from) if _def_from in available_months_labels else 0,
+            key="fp_from_month",
+        )
+    with fp2:
+        _to_sel = st.selectbox(
+            "To Month",
+            available_months_labels,
+            index=available_months_labels.index(_def_to) if _def_to in available_months_labels else max(0, len(available_months_labels) - 1),
+            key="fp_to_month",
+        )
+    with fp3:
+        _uoms_sel = st.multiselect(
+            "UOM",
+            _all_uoms,
+            default=[u for u in _def_uoms if u in _all_uoms],
+            key="fp_uoms",
+        )
+    with fp4:
+        _grades_sel = st.multiselect(
+            "Grade Spec",
+            _all_grades,
+            default=[g for g in _def_grades if g in _all_grades],
+            key="fp_grades",
+        )
+
+    _, _apply_col = st.columns([6, 1])
+    with _apply_col:
+        _apply_clicked = st.button("Apply Filters", key="fp_apply", type="primary")
+
+    st.markdown("</div>", unsafe_allow_html=True)  # pi-filter-panel
+
+    if _apply_clicked:
+        st.session_state["filter_from_month"] = _from_sel
+        st.session_state["filter_to_month"] = _to_sel
+        st.session_state["filter_uoms"] = _uoms_sel if _uoms_sel else _all_uoms
+        st.session_state["filter_grades"] = _grades_sel if _grades_sel else _all_grades
+        st.session_state["filters_applied"] = True
+        # Reset paginations when filter changes
+        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page"]:
+            st.session_state[_pk] = 1
+        st.rerun()
+
+    # ── Apply filter values to consolidated_df ─────────────────────────────────
+    _f_from_yyyymm = month_label_to_yyyymm.get(
+        st.session_state.get("filter_from_month") or available_months_labels[0] if available_months_labels else "",
+        available_months_raw[0] if available_months_raw else "",
+    )
+    _f_to_yyyymm = month_label_to_yyyymm.get(
+        st.session_state.get("filter_to_month") or available_months_labels[-1] if available_months_labels else "",
+        available_months_raw[-1] if available_months_raw else "",
+    )
+    _f_uoms = st.session_state.get("filter_uoms") or _all_uoms
+    _f_grades = st.session_state.get("filter_grades") or _all_grades
+
+    filtered_df = consolidated_df[
+        (consolidated_df["yyyymm"] >= _f_from_yyyymm)
+        & (consolidated_df["yyyymm"] <= _f_to_yyyymm)
+        & (consolidated_df["uom"].isin(_f_uoms))
+        & (consolidated_df["GRADE_SPEC"].isin(_f_grades))
+    ]
+
+    # Context label for chart subtitles
+    _from_lbl = yyyymm_to_label(_f_from_yyyymm) if _f_from_yyyymm else "—"
+    _to_lbl = yyyymm_to_label(_f_to_yyyymm) if _f_to_yyyymm else "—"
+    month_context = f"{_from_lbl} – {_to_lbl}" if _from_lbl != _to_lbl else _from_lbl
 
     # ── MATERIAL BANNER ──────────────────────────────────────────────────────
     export_csv = consolidated_df.to_csv(index=False).encode("utf-8")
@@ -624,37 +1056,6 @@ if st.session_state.selected_molecule:
             key="excel_export",
         )
         st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── GLOBAL MONTH FILTER (drives Sections 1, 2, 3) ────────────────────────
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-    gf_l, gf_r = st.columns([5, 2])
-    with gf_l:
-        st.markdown(
-            '<p style="font-size:0.78rem;color:#64748b;margin:0.5rem 0 0.2rem 0;">'
-            'Global filter — applies to KPI cards, bar chart, and bubble chart</p>',
-            unsafe_allow_html=True,
-        )
-    with gf_r:
-        st.markdown('<div class="pi-month-filter">', unsafe_allow_html=True)
-        _saved_month = st.session_state.get("chart_month_filter", "All Months")
-        chart_month = st.selectbox(
-            "Filter by Month",
-            available_months_labels,
-            index=available_months_labels.index(_saved_month) if _saved_month in available_months_labels else 0,
-            key="chart_month_sel",
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.session_state["chart_month_filter"] = chart_month
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Apply global month filter → filtered_df used by Sections 1, 2, 3
-    if chart_month != "All Months" and chart_month in month_label_to_yyyymm:
-        selected_yyyymm = month_label_to_yyyymm[chart_month]
-        filtered_df = consolidated_df[consolidated_df["yyyymm"] == selected_yyyymm]
-    else:
-        filtered_df = consolidated_df
-
-    month_context = chart_month if chart_month != "All Months" else "All Months"
 
     # ─────────────────────────────────────────────────────────────────────────
     # SECTION 1 — 5 KPI Cards with Sparklines
