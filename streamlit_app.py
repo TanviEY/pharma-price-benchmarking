@@ -661,6 +661,7 @@ if st.session_state.selected_molecule:
     # ─────────────────────────────────────────────────────────────────────────
     cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
     market_df_f = filtered_df[filtered_df["source"] != "Cipla"]
+    buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
 
     cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
     market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"])
@@ -668,12 +669,12 @@ if st.session_state.selected_molecule:
     cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
     market_n_ent = market_df_f["entity_name"].nunique()
 
-    # Per-entity WTD avg
+    # Per-entity WTD avg (buyer-only for Lowest/Highest Competitor cards)
     low_price = high_price = 0.0
     low_ent = high_ent = "—"
-    if len(market_df_f) > 0:
+    if len(buyer_df_f) > 0:
         ent_prices = (
-            market_df_f.groupby("entity_name")
+            buyer_df_f.groupby("entity_name")
             .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
             .reset_index(name="wtd_price")
         )
@@ -795,7 +796,7 @@ if st.session_state.selected_molecule:
     all_ent_agg = all_ent_agg[all_ent_agg["wtd_price"] > 0]
 
     cipla_ent_row = all_ent_agg[all_ent_agg["source"] == "Cipla"]
-    non_cipla_rows = all_ent_agg[all_ent_agg["source"] != "Cipla"].sort_values("wtd_price").reset_index(drop=True)
+    non_cipla_rows = all_ent_agg[all_ent_agg["source"] == "Buyer"].sort_values("wtd_price").reset_index(drop=True)
     cipla_bar_price = cipla_ent_row["wtd_price"].mean() if len(cipla_ent_row) > 0 else cipla_price
 
     # Bar chart data
@@ -1031,9 +1032,9 @@ if st.session_state.selected_molecule:
     # ─────────────────────────────────────────────────────────────────────────
     # SECTION 3 — Bubble Chart (Price over Time)
     # ─────────────────────────────────────────────────────────────────────────
-    # Group by entity + yyyymm
+    # Group by entity + yyyymm (buyer-only for competitors, plus Cipla)
     bubble_df = (
-        filtered_df.groupby(["entity_name", "yyyymm", "source"])
+        filtered_df[filtered_df["source"].isin(["Buyer", "Cipla"])].groupby(["entity_name", "yyyymm", "source"])
         .apply(lambda g: pd.Series({
             "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
             "sum_qty":   g["Sum_of_QTY"].sum(),
@@ -1295,9 +1296,10 @@ if st.session_state.selected_molecule:
         _pagination_bar(len(cipla_sorted), _PAGE_SIZE, cipla_pg, "cipla_table_page", "cipla")
 
     with t4_r:
-        # EXIM Supplier table — sort by qty descending, no Origin column
+        # EXIM Supplier table — sort by qty descending, supplier-only rows
+        supplier_df_f = filtered_df[filtered_df["source"] == "Supplier"]
         exim_agg = (
-            market_df_f.groupby("entity_name")
+            supplier_df_f.groupby("entity_name")
             .apply(lambda g: pd.Series({
                 "grade_e":   g["GRADE_SPEC"].mode()[0] if len(g) > 0 else grade,
                 "uom_e":     g["uom"].mode()[0] if len(g) > 0 else uom,
@@ -1340,9 +1342,9 @@ if st.session_state.selected_molecule:
             </tr>
             """
 
-        total_qty_e = market_df_f["Sum_of_QTY"].sum()
-        total_val_e = market_df_f["Sum_of_TOTAL_VALUE"].sum()
-        wtd_avg_e = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"])
+        total_qty_e = supplier_df_f["Sum_of_QTY"].sum()
+        total_val_e = supplier_df_f["Sum_of_TOTAL_VALUE"].sum()
+        wtd_avg_e = _safe_wtd_avg(supplier_df_f["Sum_of_TOTAL_VALUE"], supplier_df_f["Sum_of_QTY"])
         vs_footer_diff = wtd_avg_e - cipla_price
         if cipla_price > 0:
             vs_footer = (
@@ -1369,7 +1371,7 @@ if st.session_state.selected_molecule:
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
 <div>
 <div class="pi-section-title">EXIM — Supplier Price &amp; Volume</div>
-<div class="pi-section-sub">supplier/buyer · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
+<div class="pi-section-sub">supplier · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
 </div>
 <span class="badge badge-cyan">EXIM</span>
 </div>
