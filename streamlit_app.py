@@ -660,7 +660,7 @@ if st.session_state.selected_molecule:
     # SECTION 1 — 5 KPI Cards with Sparklines
     # ─────────────────────────────────────────────────────────────────────────
     cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
-    market_df_f = filtered_df[filtered_df["source"] == "Buyer"]
+    market_df_f = filtered_df[filtered_df["source"] != "Cipla"]
 
     cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
     market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"])
@@ -702,7 +702,7 @@ if st.session_state.selected_molecule:
         _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
     )
     market_spark = _render_sparkline(
-        _monthly_wtd(lambda d: d[d["source"] == "Buyer"], months_sorted_all), "#0891b2"
+        _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
     )
 
     # Cost advantage badge
@@ -731,10 +731,10 @@ if st.session_state.selected_molecule:
     with k2:
         st.markdown(f"""
         <div class="pi-kpi-card" style="border-top-color:#0891b2;">
-          <div class="pi-kpi-label">EXIM Buyer Avg</div>
+          <div class="pi-kpi-label">EXIM Market Avg</div>
           <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} buyers</span></div>
-          <div class="pi-kpi-note">EXIM buyers only</div>
+          <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
+          <div class="pi-kpi-note">EXIM data</div>
           {market_spark}
         </div>
         """, unsafe_allow_html=True)
@@ -795,11 +795,11 @@ if st.session_state.selected_molecule:
     all_ent_agg = all_ent_agg[all_ent_agg["wtd_price"] > 0]
 
     cipla_ent_row = all_ent_agg[all_ent_agg["source"] == "Cipla"]
-    non_cipla_rows = all_ent_agg[all_ent_agg["source"] == "Buyer"].sort_values("wtd_price").reset_index(drop=True)
+    non_cipla_rows = all_ent_agg[all_ent_agg["source"] != "Cipla"].sort_values("wtd_price").reset_index(drop=True)
     cipla_bar_price = cipla_ent_row["wtd_price"].mean() if len(cipla_ent_row) > 0 else cipla_price
 
     # Bar chart data
-    s2_market_df = s2_df[s2_df["source"] == "Buyer"]
+    s2_market_df = s2_df[s2_df["source"] != "Cipla"]
     s2_market_price = _safe_wtd_avg(s2_market_df["Sum_of_TOTAL_VALUE"], s2_market_df["Sum_of_QTY"])
 
     bar_items_competitor = []
@@ -1046,10 +1046,9 @@ if st.session_state.selected_molecule:
 
     cipla_bubble_ents = set(bubble_df[bubble_df["source"] == "Cipla"]["entity_name"].unique())
 
-    # Top 25% by value: total value per buyer entity across filtered_df
-    buyer_ents_b = set(bubble_df[bubble_df["source"] == "Buyer"]["entity_name"].unique())
-    ent_total_val = bubble_df[bubble_df["entity_name"].isin(buyer_ents_b)].groupby("entity_name")["total_val"].sum()
-    non_cipla_ents_b = list(buyer_ents_b)
+    # Top 25% by value: total value per entity across filtered_df
+    ent_total_val = bubble_df.groupby("entity_name")["total_val"].sum()
+    non_cipla_ents_b = [e for e in ent_total_val.index if e not in cipla_bubble_ents]
     if non_cipla_ents_b:
         val_threshold = np.percentile(ent_total_val[non_cipla_ents_b].values, 75)
         top25_ents_b = set(e for e in non_cipla_ents_b if ent_total_val[e] >= val_threshold)
@@ -1356,7 +1355,7 @@ if st.session_state.selected_molecule:
 
         exim_rows_html += f"""
         <tr class="footer-row">
-          <td>Buyer WTD Avg</td>
+          <td>EXIM WTD Avg</td>
           <td>—</td>
           <td>{fmt_qty(total_qty_e)}</td>
           <td>{fmt_inr(total_val_e)}</td>
@@ -1369,8 +1368,8 @@ if st.session_state.selected_molecule:
 <div class="pi-card" style="margin-bottom:0.5rem;">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
 <div>
-<div class="pi-section-title">EXIM — Buyer Price &amp; Volume</div>
-<div class="pi-section-sub">buyer · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
+<div class="pi-section-title">EXIM — Supplier Price &amp; Volume</div>
+<div class="pi-section-sub">supplier/buyer · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
 </div>
 <span class="badge badge-cyan">EXIM</span>
 </div>
@@ -1378,7 +1377,7 @@ if st.session_state.selected_molecule:
 <table class="pi-data-table">
 <thead>
 <tr>
-<th>BUYER</th><th>GRADE</th>
+<th>SUPPLIER</th><th>GRADE</th>
 <th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th><th>VS CIPLA</th>
 </tr>
 </thead>
