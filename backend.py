@@ -93,12 +93,14 @@ def extract_yyyymm(date_col) -> str:
         return None
 
 
-def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.DataFrame, Dict]:
+def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
     """
     Apply outlier filters using EXIM avg qty and Cipla price baseline
     1. QTY >= 10% of EXIM Avg Qty
-    2. TOTAL_VALUE within Cipla Price ± 30%
+    2. unit_price within Cipla Price ± 30%
+    Returns: (filtered_df, outlier_df, stats_dict)
     """
+    original_df = df.copy()
     original_count = len(df)
 
     # Filter 1: Quantity threshold
@@ -118,7 +120,14 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
     filtered_count = len(df)
     removed = original_count - filtered_count
 
-    return df, {
+    # Build outlier df: rows in original that are NOT in filtered
+    outlier_df = original_df[~original_df.index.isin(df.index)].copy()
+    # Add reason columns for validation
+    outlier_df['unit_price'] = outlier_df['TOTAL_VALUE'] / outlier_df['QTY']
+    outlier_df['outlier_reason_qty'] = outlier_df['QTY'] < min_qty
+    outlier_df['outlier_reason_price'] = ~((outlier_df['unit_price'] >= price_lower) & (outlier_df['unit_price'] <= price_upper))
+
+    return df, outlier_df, {
         'original_count': original_count,
         'filtered_count': filtered_count,
         'removed_count': removed,
@@ -452,8 +461,8 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
         # Step 4: Calculate baselines
         cipla_baseline = calculate_cipla_baseline(cipla_df)
 
-        # Step 5: Filter outliers (returns tuple of (df, stats))
-        molecule_df_filtered, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
+        # Step 5: Filter outliers (returns tuple of (filtered_df, outlier_df, stats))
+        molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
 
         # Step 6: Aggregate
         supplier_agg = aggregate_supplier(molecule_df_filtered)
@@ -477,6 +486,7 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
         supplier_agg.to_csv(processed_dir / f"{molecule_name}_supplier.csv", index=False)
         buyer_agg.to_csv(processed_dir / f"{molecule_name}_buyer.csv", index=False)
         cipla_agg.to_csv(processed_dir / f"cipla_{molecule_name}.csv", index=False)
+        outlier_df.to_csv(processed_dir / f"outlier_{molecule_name}.csv", index=False)
 
         return {
             'status': 'success',
@@ -491,7 +501,8 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
                 'supplier': supplier_agg,
                 'buyer': buyer_agg,
                 'cipla': cipla_agg,
-                'consolidated': consolidated
+                'consolidated': consolidated,
+                'outlier': outlier_df,
             }
         }
 
