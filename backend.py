@@ -95,14 +95,15 @@ def extract_yyyymm(date_col) -> str:
 
 def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.DataFrame, Dict]:
     """
-    Apply outlier filters based on Cipla baseline
-    1. QTY >= 10% of Cipla Avg Qty
+    Apply outlier filters using EXIM avg qty and Cipla price baseline
+    1. QTY >= 10% of EXIM Avg Qty
     2. TOTAL_VALUE within Cipla Price ± 30%
     """
     original_count = len(df)
 
     # Filter 1: Quantity threshold
-    min_qty = cipla_baseline['avg_qty'] * 0.10
+    exim_avg_qty = df['QTY'].mean()
+    min_qty = exim_avg_qty * 0.10
     df = df[df['QTY'] >= min_qty]
 
     # Filter 2: Price variance
