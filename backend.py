@@ -8,6 +8,7 @@ import warnings
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from thefuzz import fuzz
 from typing import Dict, List, Optional, Tuple
 
 warnings.filterwarnings('ignore')
@@ -88,7 +89,7 @@ def extract_yyyymm(date_col) -> str:
         else:
             date_obj = date_col
         return date_obj.strftime('%Y%m')
-    except:
+    except Exception:
         return None
 
 
@@ -343,7 +344,6 @@ def get_molecule_file_info(molecule: str, data_dir: str, molecule_mapping: Dict)
 
 def _score_query(query: str, candidate: str) -> int:
     """Score a query against a single candidate string."""
-    from thefuzz import fuzz
     q, c = query.lower(), candidate.lower()
     if q == c:
         return 100
