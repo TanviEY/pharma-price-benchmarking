@@ -792,8 +792,7 @@ if st.session_state.selected_molecule:
                 ignore_index=True,
             )
             # Save processed files
-            from pathlib import Path as _Path
-            _proc_dir = _Path("data/processed")
+            _proc_dir = Path("data/processed")
             _proc_dir.mkdir(parents=True, exist_ok=True)
             supplier_agg.to_csv(_proc_dir / f"{selected_mol}_supplier.csv", index=False)
             buyer_agg.to_csv(_proc_dir / f"{selected_mol}_buyer.csv", index=False)
@@ -920,8 +919,12 @@ if st.session_state.selected_molecule:
             _disp_cols["Reason"] = "Reason"
 
             _show_cols = [c for c in _disp_cols if c in outlier_display.columns]
-            _show_df = outlier_display[_show_cols].rename(columns=_disp_cols).reset_index(drop=False)
-            _show_df.rename(columns={"index": "Row Index"}, inplace=True)
+            _show_df = (
+                outlier_display[_show_cols]
+                .rename(columns=_disp_cols)
+                .reset_index(drop=False)
+                .rename(columns={"index": "Row Index"})
+            )
             st.dataframe(_show_df, use_container_width=True, hide_index=True)
         else:
             st.success("✅ No outliers detected.")
