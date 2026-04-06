@@ -78,6 +78,76 @@ def load_multiple_files(file_list: list) -> pd.DataFrame:
 
 # ── Data Processing ────────────────────────────────────────────────────────────
 
+_UOM_CANONICAL_MAP = {
+    "KGS": "KG",
+    "GMS": "GM",
+    "GRM": "GM",
+    "GRMS": "GM",
+    "LTR": "LT",
+    "LTRS": "LT",
+    "MLS": "ML",
+    "MGS": "MG",
+}
+
+_KNOWN_UOMS = set(_UOM_CANONICAL_MAP.values()) | set(_UOM_CANONICAL_MAP.keys())
+
+
+def normalize_uom(uom: str) -> str:
+    """Normalize UOM string to a canonical uppercase form."""
+    if not isinstance(uom, str):
+        return uom
+    uom = uom.strip().upper()
+    return _UOM_CANONICAL_MAP.get(uom, uom)
+
+
+def llm_normalize_uom(df: pd.DataFrame, uom_col: str) -> pd.DataFrame:
+    """
+    Normalize UOM column using Gemini to map non-standard values to canonical forms.
+    Falls back to normalize_uom() if Gemini is unavailable.
+    """
+    if uom_col not in df.columns:
+        return df
+
+    # Always apply rule-based normalization first
+    df[uom_col] = df[uom_col].apply(normalize_uom)
+
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        return df
+
+    non_standard_mask = ~df[uom_col].apply(
+        lambda v: (isinstance(v, str) and v in _KNOWN_UOMS)
+    )
+    non_standard_values = df.loc[non_standard_mask, uom_col].dropna().unique()
+
+    if len(non_standard_values) == 0:
+        return df
+
+    try:
+        values_list = "\n".join(f"- {v}" for v in non_standard_values)
+        prompt = (
+            "You are a pharmaceutical data normalizer. "
+            "Map each of the following non-standard Unit of Measure (UOM) values to a canonical short uppercase form "
+            "(e.g. KG, GM, ML, LT, MG, NOS, TAB, CAP, AMP, VIAL, PKT). "
+            "Return a JSON object mapping each original value to its normalized UOM. "
+            "Example: {\"kilogram\": \"KG\", \"grams\": \"GM\"}.\n"
+            f"Values to normalize:\n{values_list}"
+        )
+        response = _gemini_model.generate_content(prompt)
+        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+        if json_match:
+            mapping = json.loads(json_match.group())
+            clean_mapping = {
+                orig: normalized.strip().upper()
+                for orig, normalized in mapping.items()
+                if isinstance(normalized, str) and normalized.strip()
+            }
+            if clean_mapping:
+                df[uom_col] = df[uom_col].replace(clean_mapping)
+    except Exception:
+        pass  # fallback: rule-based normalization already applied above
+
+    return df
+
 
 def extract_grade_spec(item_text: str) -> str:
     """
@@ -304,6 +374,10 @@ def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df['GRADE_SPEC'] = 'USP'
 
+    # Normalize UOM column
+    if 'UQC' in df.columns:
+        df = llm_normalize_uom(df, 'UQC')
+
     # Ensure QTY is numeric
     df['QTY'] = pd.to_numeric(df['QTY'], errors='coerce')
     df['TOTAL_VALUE'] = pd.to_numeric(df['TOTAL_VALUE'], errors='coerce')
@@ -319,6 +393,10 @@ def prepare_cipla_data(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     df = llm_normalize_cipla_grade_spec(df)
+
+    # Normalize UOM column
+    if 'base_unit_of_measure' in df.columns:
+        df = llm_normalize_uom(df, 'base_unit_of_measure')
 
     # Extract date
     df['yyyymm'] = df['posting_date_in_the_document'].apply(extract_yyyymm)
