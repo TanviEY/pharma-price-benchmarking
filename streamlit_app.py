@@ -1,6 +1,7 @@
 # streamlit_app.py
 import calendar
 import math
+import os
 import time
 import streamlit as st
 import pandas as pd
@@ -10,10 +11,16 @@ from pathlib import Path
 
 try:
     import google.generativeai as genai
-    _GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU") if hasattr(st, "secrets") else "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU"
-    genai.configure(api_key=_GEMINI_API_KEY)
-    _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-    _GEMINI_AVAILABLE = True
+    _GEMINI_API_KEY = (
+        st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None
+    ) or os.environ.get("GEMINI_API_KEY")
+    if _GEMINI_API_KEY:
+        genai.configure(api_key=_GEMINI_API_KEY)
+        _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+        _GEMINI_AVAILABLE = True
+    else:
+        _GEMINI_AVAILABLE = False
+        _gemini_model = None
 except Exception:
     _GEMINI_AVAILABLE = False
     _gemini_model = None
