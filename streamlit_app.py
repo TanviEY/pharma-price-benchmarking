@@ -999,819 +999,834 @@ if st.session_state.selected_molecule:
             st.session_state[_pk] = 1
         st.rerun()
 
-    # ── Apply filter values to consolidated_df ─────────────────────────────────
-    _f_from_yyyymm = month_label_to_yyyymm.get(
-        st.session_state.get("filter_from_month") or available_months_labels[0] if available_months_labels else "",
-        available_months_raw[0] if available_months_raw else "",
-    )
-    _f_to_yyyymm = month_label_to_yyyymm.get(
-        st.session_state.get("filter_to_month") or available_months_labels[-1] if available_months_labels else "",
-        available_months_raw[-1] if available_months_raw else "",
-    )
-    _f_uoms = st.session_state.get("filter_uoms") or _all_uoms
-    _f_grades = st.session_state.get("filter_grades") or _all_grades
 
-    filtered_df = consolidated_df[
-        (consolidated_df["yyyymm"] >= _f_from_yyyymm)
-        & (consolidated_df["yyyymm"] <= _f_to_yyyymm)
-        & (consolidated_df["uom"].isin(_f_uoms))
-        & (consolidated_df["GRADE_SPEC"].isin(_f_grades))
-    ]
-
-    # Context label for chart subtitles
-    _from_lbl = yyyymm_to_label(_f_from_yyyymm) if _f_from_yyyymm else "—"
-    _to_lbl = yyyymm_to_label(_f_to_yyyymm) if _f_to_yyyymm else "—"
-    month_context = f"{_from_lbl} – {_to_lbl}" if _from_lbl != _to_lbl else _from_lbl
-
-    # ── MATERIAL BANNER ──────────────────────────────────────────────────────
-    export_csv = consolidated_df.to_csv(index=False).encode("utf-8")
-
-    bann_l, bann_r = st.columns([5, 1])
-    with bann_l:
-        st.markdown(f"""
-        <div class="pi-mat-banner">
-          <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-            <div class="pi-mat-icon">🧪</div>
-            <div>
-              <div class="pi-mat-name">{selected_mol.upper()}</div>
-              <div style="margin-top:4px;">
-                <span class="pi-chip">API</span>
-                <span class="pi-chip">CAS {cas_code[:22]}</span>
-                <span class="pi-chip">INR / {uom}</span>
-              </div>
-            </div>
+    if not st.session_state.get("filters_applied", False):
+        st.markdown("""
+        <div style="text-align:center; padding: 2.5rem 2rem; margin: 1rem 1.5rem;">
+          <div style="font-size:2.5rem; margin-bottom:0.75rem;">🎛️</div>
+          <div style="font-size:1.1rem; font-weight:700; color:#0f172a; margin-bottom:0.4rem;">
+            Configure your filters to begin analysis
+          </div>
+          <div style="font-size:0.88rem; color:#64748b; max-width:480px; margin:0 auto;">
+            Select the date range, UOM and Grade Spec above, then click
+            <strong>Apply Filters</strong> to load the visualizations.
           </div>
         </div>
         """, unsafe_allow_html=True)
-    with bann_r:
-        st.markdown(
-            '<div class="pi-export-row" style="display:flex;gap:6px;justify-content:flex-end;margin-top:1rem;margin-right:1.5rem;">',
-            unsafe_allow_html=True,
-        )
-        st.download_button(
-            label="Export CSV",
-            data=export_csv,
-            file_name=f"{selected_mol}_all.csv",
-            mime="text/csv",
-            key="excel_export",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # SECTION 1 — 5 KPI Cards with Sparklines
-    # ─────────────────────────────────────────────────────────────────────────
-    cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
-    market_df_f = filtered_df[filtered_df["source"] != "Cipla"]
-    buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
-
-    cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
-    market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"])
-    cipla_n_records = len(cipla_df_f)
-    cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
-    market_n_ent = market_df_f["entity_name"].nunique()
-
-    # Per-entity WTD avg (buyer-only for Lowest/Highest Competitor cards)
-    low_price = high_price = 0.0
-    low_ent = high_ent = "—"
-    if len(buyer_df_f) > 0:
-        ent_prices = (
-            buyer_df_f.groupby("entity_name")
-            .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
-            .reset_index(name="wtd_price")
-        )
-        ent_prices = ent_prices[ent_prices["wtd_price"] > 0]
-        if len(ent_prices) > 0:
-            min_row = ent_prices.loc[ent_prices["wtd_price"].idxmin()]
-            max_row = ent_prices.loc[ent_prices["wtd_price"].idxmax()]
-            low_price, low_ent = min_row["wtd_price"], min_row["entity_name"]
-            high_price, high_ent = max_row["wtd_price"], max_row["entity_name"]
-
-    cost_adv = cipla_price - market_price if market_price > 0 else 0.0
-    cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
-
-    # Sparklines — monthly WTD avg across ALL months (consolidated_df, not filtered)
-    months_sorted_all = sorted(consolidated_df["yyyymm"].unique())
-
-    def _monthly_wtd(src_fn, months):
-        vals = []
-        for m in months:
-            mdf = consolidated_df[consolidated_df["yyyymm"] == m]
-            mdf = src_fn(mdf)
-            vals.append(_safe_wtd_avg(mdf["Sum_of_TOTAL_VALUE"], mdf["Sum_of_QTY"]))
-        return vals
-
-    cipla_spark = _render_sparkline(
-        _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
-    )
-    market_spark = _render_sparkline(
-        _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
-    )
-
-    # Cost advantage badge
-    if cipla_price > 0 and market_price > 0:
-        adv_sym = "▼" if cost_adv < 0 else "▲"
-        adv_word = "below" if cost_adv < 0 else "above"
-        adv_text = f"{adv_sym} {cost_pct:.1f}% {adv_word} market"
     else:
-        adv_text = month_context
-
-    st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-    k1, k2, k3, k4, k5 = st.columns(5)
-
-    with k1:
-        st.markdown(f"""
-        <div class="pi-kpi-card" style="border-top-color:#3b82f6;">
-          <div class="pi-kpi-label">Cipla WTD Avg · ERP</div>
-          <div class="pi-kpi-value">₹{cipla_price:,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{month_context}</span></div>
-          <div class="pi-kpi-note">{cipla_n_records} POs · {fmt_qty(cipla_total_qty)} {uom}</div>
-          {cipla_spark}
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k2:
-        st.markdown(f"""
-        <div class="pi-kpi-card" style="border-top-color:#0891b2;">
-          <div class="pi-kpi-label">EXIM Market Avg</div>
-          <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
-          <div class="pi-kpi-note">EXIM data</div>
-          {market_spark}
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k3:
-        adv_bg = "#f0fdf4" if cost_adv <= 0 else "#fff1f2"
-        adv_fg = "#16a34a" if cost_adv <= 0 else "#dc2626"
-        adv_sign = "−" if cost_adv < 0 else "+"
-        st.markdown(f"""
-        <div class="pi-kpi-card" style="border-top-color:#16a34a;">
-          <div class="pi-kpi-label">Cost Advantage</div>
-          <div class="pi-kpi-value" style="color:{adv_fg};">{adv_sign}₹{abs(cost_adv):,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:{adv_bg};color:{adv_fg};">{adv_text}</span></div>
-          <div class="pi-kpi-note">vs EXIM avg</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k4:
-        st.markdown(f"""
-        <div class="pi-kpi-card" style="border-top-color:#d97706;">
-          <div class="pi-kpi-label">Lowest Competitor</div>
-          <div class="pi-kpi-value">₹{low_price:,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:#fffbeb;color:#d97706;">{low_ent[:22] if low_ent != "—" else "—"}</span></div>
-          <div class="pi-kpi-note">period avg</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k5:
-        st.markdown(f"""
-        <div class="pi-kpi-card" style="border-top-color:#dc2626;">
-          <div class="pi-kpi-label">Highest Competitor</div>
-          <div class="pi-kpi-value">₹{high_price:,.0f} <span>/{uom}</span></div>
-          <div><span class="pi-kpi-badge" style="background:#fff1f2;color:#dc2626;">{high_ent[:22] if high_ent != "—" else "—"}</span></div>
-          <div class="pi-kpi-note">premium grade</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
-    st.markdown('<div style="height:1.5rem;"></div>', unsafe_allow_html=True)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # SECTION 2 — Competitor Benchmark (1.5 : 1 layout)
-    # ─────────────────────────────────────────────────────────────────────────
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-
-    # Section 2 uses filtered_df (already filtered by global month selector)
-    s2_df = filtered_df
-
-    # Per-entity WTD avg aggregation
-    all_ent_agg = (
-        s2_df.groupby(["entity_name", "source"])
-        .apply(lambda g: pd.Series({
-            "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
-            "total_qty": g["Sum_of_QTY"].sum(),
-        }))
-        .reset_index()
-    )
-    all_ent_agg = all_ent_agg[all_ent_agg["wtd_price"] > 0]
-
-    cipla_ent_row = all_ent_agg[all_ent_agg["source"] == "Cipla"]
-    non_cipla_rows = all_ent_agg[all_ent_agg["source"] == "Buyer"].sort_values("wtd_price").reset_index(drop=True)
-    cipla_bar_price = cipla_ent_row["wtd_price"].mean() if len(cipla_ent_row) > 0 else cipla_price
-
-    # Bar chart data
-    s2_market_df = s2_df[s2_df["source"] != "Cipla"]
-    s2_market_price = _safe_wtd_avg(s2_market_df["Sum_of_TOTAL_VALUE"], s2_market_df["Sum_of_QTY"])
-
-    bar_items_competitor = []
-    for _, row in non_cipla_rows.iterrows():
-        bar_items_competitor.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
-
-    cipla_bar_item = None
-    market_bar_item = None
-    if len(cipla_ent_row) > 0:
-        cipla_bar_item = {"entity": "★ Cipla", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()}
-    if s2_market_price > 0:
-        market_bar_item = {"entity": "EXIM Avg", "price": s2_market_price, "type": "market", "qty": s2_market_df["Sum_of_QTY"].sum()}
-
-    def _bar_width(price, min_p, max_p):
-        price_range = max_p - min_p if max_p > min_p else 1
-        return int(40 + (price - min_p) / price_range * 55)
-
-    s2_left, s2_right = st.columns([3, 2])
-
-    with s2_left:
-        # ── Top 25% toggle ────────────────────────────────────────────────────
-        bar_view = st.radio(
-            "View mode",
-            ["Top 25% by Volume", "All Competitors"],
-            index=0 if st.session_state["bar_view_mode"] == "Top 25% by Volume" else 1,
-            key="bar_view_radio",
-            horizontal=True,
-            label_visibility="collapsed",
+        # ── Apply filter values to consolidated_df ─────────────────────────────────
+        _f_from_yyyymm = month_label_to_yyyymm.get(
+            st.session_state.get("filter_from_month") or available_months_labels[0] if available_months_labels else "",
+            available_months_raw[0] if available_months_raw else "",
         )
-        if bar_view != st.session_state["bar_view_mode"]:
-            st.session_state["bar_view_mode"] = bar_view
-            st.session_state["bar_page"] = 1
-            st.rerun()
-
-        # Determine which competitors to show
-        if bar_view == "Top 25% by Volume" and len(non_cipla_rows) > 0:
-            volumes = non_cipla_rows["total_qty"].values
-            threshold = np.percentile(volumes, 75)
-            top25_rows = non_cipla_rows[non_cipla_rows["total_qty"] >= threshold]
-            if len(top25_rows) == 0:
-                top25_rows = non_cipla_rows
-            display_competitors = top25_rows.reset_index(drop=True)
-        else:
-            display_competitors = non_cipla_rows
-
-        # Pagination for "All Competitors" mode
-        if bar_view == "All Competitors":
-            bar_page = st.session_state.get("bar_page", 1)
-            total_comp = len(display_competitors)
-            page_size = _PAGE_SIZE
-            start = (bar_page - 1) * page_size
-            end = start + page_size
-            page_competitors = display_competitors.iloc[start:end]
-        else:
-            page_competitors = display_competitors
-
-        # Build the full bar items list for display
-        bar_items_display = []
-        for _, row in page_competitors.iterrows():
-            bar_items_display.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
-        if cipla_bar_item:
-            bar_items_display.append(cipla_bar_item)
-        if market_bar_item:
-            bar_items_display.append(market_bar_item)
-
-        bar_items_sorted = sorted(bar_items_display, key=lambda x: x["price"])
-
-        if bar_items_sorted:
-            prices_all = [r["price"] for r in bar_items_sorted]
-            min_p = min(prices_all)
-            max_p = max(prices_all)
-        else:
-            min_p = max_p = 0
-
-        # Build HTML bar chart
-        bar_html = f"""
-        <div class="pi-card" style="margin-bottom:0.5rem;">
-          <div class="pi-section-title">WTD Average Price Comparison (₹/{uom})</div>
-          <div class="pi-section-sub">Cipla vs competitors · {month_context}</div>
-          <div style="padding:0.2rem 0;">
-        """
-        for r in bar_items_sorted:
-            pct = _bar_width(r["price"], min_p, max_p)
-            ent_display = r["entity"]
-            price_val = r["price"]
-            if r["type"] == "cipla":
-                fill = f"background:linear-gradient(90deg,#1d4ed8,#3b82f6);width:{pct}%"
-                lbl_cls = "cipla"
-                badge = '<span class="badge badge-blue">Benchmark</span>'
-            elif r["type"] == "market":
-                fill = f"background:rgba(8,145,178,0.35);width:{pct}%"
-                lbl_cls = ""
-                badge = '<span class="badge badge-cyan">EXIM Avg</span>'
-            else:
-                vs = ((price_val - cipla_bar_price) / cipla_bar_price * 100) if cipla_bar_price > 0 else 0
-                if vs < 0:
-                    fill = f"background:linear-gradient(90deg,#15803d,#16a34a);width:{pct}%"
-                    badge = f'<span style="color:#16a34a;font-weight:700;">▼ {abs(vs):.1f}%</span>'
-                elif vs > 15:
-                    fill = f"background:linear-gradient(90deg,#b91c1c,#dc2626);width:{pct}%"
-                    badge = f'<span style="color:#dc2626;font-weight:700;">▲ {vs:.1f}%</span>'
-                else:
-                    fill = f"background:linear-gradient(90deg,#b45309,#d97706);width:{pct}%"
-                    badge = f'<span style="color:#d97706;font-weight:700;">▲ {vs:.1f}%</span>'
-                lbl_cls = ""
-
-            bar_html += f"""
-            <div class="pi-bar-row">
-              <div class="pi-bar-label {lbl_cls}">{ent_display[:30]}</div>
-              <div class="pi-bar-track">
-                <div class="pi-bar-fill" style="{fill}"></div>
-              </div>
-              <div class="pi-bar-price">₹{price_val:,.0f}</div>
-              <div class="pi-bar-badge">{badge}</div>
-            </div>
-            """
-
-        if bar_items_sorted:
-            mid_p = (min_p + max_p) / 2
-            bar_html += f"""
-            <div class="pi-bar-scale">
-              <span>₹{min_p:,.0f}</span>
-              <span>₹{mid_p:,.0f}</span>
-              <span>₹{max_p:,.0f}</span>
-            </div>
-            """
-        else:
-            bar_html += "<p style='color:var(--t3);'>No data available.</p>"
-
-        bar_html += "</div></div>"
-        _html(bar_html)
-
-        # Pagination (only for "All Competitors" mode)
-        if bar_view == "All Competitors":
-            _pagination_bar(len(display_competitors), _PAGE_SIZE, st.session_state.get("bar_page", 1), "bar_page", "bar")
-
-    with s2_right:
-        # Competitor detail table — sort by volume descending, Cipla pinned at top
-        non_cipla_by_vol = non_cipla_rows.sort_values("total_qty", ascending=False).reset_index(drop=True)
-
-        # Cipla row first
-        table_rows = ""
-        if len(cipla_ent_row) > 0:
-            cipla_ent_name = cipla_ent_row.iloc[0]["entity_name"]
-            cipla_qty_disp = cipla_ent_row["total_qty"].sum()
-            table_rows += f"""
-            <tr class="cipla-row">
-              <td>
-                <div style="display:flex;align-items:center;gap:7px;">
-                  <div class="pi-av" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);">CI</div>
-                  <div>
-                    <div style="font-weight:700;color:#1d4ed8;">{cipla_ent_name[:20]}</div>
-                    <div style="font-size:0.65rem;color:#64748b;">ERP</div>
-                  </div>
-                </div>
-              </td>
-              <td style="font-weight:700;color:#1d4ed8;">₹{cipla_bar_price:,.0f}</td>
-              <td>{fmt_qty(cipla_qty_disp)}</td>
-              <td>—</td>
-              <td><span class="badge badge-blue">Ref</span></td>
-            </tr>
-            """
-
-        # Paginated non-Cipla rows
-        comp_page = st.session_state.get("comp_table_page", 1)
-        ct_start = (comp_page - 1) * _PAGE_SIZE
-        ct_end = ct_start + _PAGE_SIZE
-        page_non_cipla = non_cipla_by_vol.iloc[ct_start:ct_end]
-
-        for idx, (_, row) in enumerate(page_non_cipla.iterrows()):
-            ent = row["entity_name"]
-            price = row["wtd_price"]
-            qty = row["total_qty"]
-            vs_pct = ((price - cipla_bar_price) / cipla_bar_price * 100) if cipla_bar_price > 0 else 0
-            av_col = _avatar_color(ct_start + idx)
-            av_ini = _initials(ent)
-            if vs_pct < 0:
-                vs_html = f'<span style="color:#16a34a;font-weight:700;">▼ {abs(vs_pct):.1f}%</span>'
-                pos = '<span class="badge badge-green">Cheaper</span>'
-            elif vs_pct > 15:
-                vs_html = f'<span style="color:#dc2626;font-weight:700;">▲ {vs_pct:.1f}%</span>'
-                pos = '<span class="badge badge-red">Premium</span>'
-            else:
-                vs_html = f'<span style="color:#d97706;font-weight:700;">▲ {vs_pct:.1f}%</span>'
-                pos = '<span class="badge badge-amber">Higher</span>'
-            table_rows += f"""
-            <tr>
-              <td>
-                <div style="display:flex;align-items:center;gap:7px;">
-                  <div class="pi-av" style="background:{av_col};">{av_ini}</div>
-                  <div>
-                    <div style="font-weight:500;">{ent[:20]}</div>
-                    <div style="font-size:0.65rem;color:#64748b;">EXIM</div>
-                  </div>
-                </div>
-              </td>
-              <td>₹{price:,.0f}</td>
-              <td>{fmt_qty(qty)}</td>
-              <td>{vs_html}</td>
-              <td>{pos}</td>
-            </tr>
-            """
-
-        comp_table = f"""
-        <div class="pi-card" style="margin-bottom:0.5rem;">
-          <div class="pi-section-title">Price &amp; Volume Summary</div>
-          <div class="pi-section-sub">Per entity · WTD average price · {month_context}</div>
-          <div style="overflow-x:auto;">
-          <table class="pi-comp-table">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>WTD Avg</th>
-                <th>Volume ({uom})</th>
-                <th>vs Cipla</th>
-                <th>Position</th>
-              </tr>
-            </thead>
-            <tbody>{table_rows}</tbody>
-          </table>
-          </div>
-        </div>
-        """
-        _html(comp_table)
-        _pagination_bar(len(non_cipla_by_vol), _PAGE_SIZE, comp_page, "comp_table_page", "comp")
-
-    st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # SECTION 3 — Bubble Chart (Price over Time)
-    # ─────────────────────────────────────────────────────────────────────────
-    # Group by entity + yyyymm (buyer-only for competitors, plus Cipla)
-    bubble_df = (
-        filtered_df[filtered_df["source"].isin(["Buyer", "Cipla"])].groupby(["entity_name", "yyyymm", "source"])
-        .apply(lambda g: pd.Series({
-            "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
-            "sum_qty":   g["Sum_of_QTY"].sum(),
-            "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
-        }))
-        .reset_index()
-    )
-    bubble_df = bubble_df[bubble_df["wtd_price"] > 0].copy()
-    bubble_df["month_label"] = bubble_df["yyyymm"].apply(yyyymm_to_label)
-
-    cipla_bubble_ents = set(bubble_df[bubble_df["source"] == "Cipla"]["entity_name"].unique())
-
-    # Top 25% by value: total value per entity across filtered_df
-    ent_total_val = bubble_df.groupby("entity_name")["total_val"].sum()
-    non_cipla_ents_b = [e for e in ent_total_val.index if e not in cipla_bubble_ents]
-    if non_cipla_ents_b:
-        val_threshold = np.percentile(ent_total_val[non_cipla_ents_b].values, 75)
-        top25_ents_b = set(e for e in non_cipla_ents_b if ent_total_val[e] >= val_threshold)
-    else:
-        top25_ents_b = set()
-    # Always include Cipla entities
-    entities_bubble = sorted(top25_ents_b | cipla_bubble_ents)
-
-    # Scale bubble sizes: sqrt(qty / max_qty) * 60 + 10
-    max_qty_b = bubble_df["sum_qty"].max() if bubble_df["sum_qty"].max() > 0 else 1
-    bubble_df["bubble_size"] = ((bubble_df["sum_qty"] / max_qty_b) ** 0.5) * 60 + 10
-
-    # Color map
-    entity_colors_b = {}
-    b_color_idx = 0
-    for ent in sorted(bubble_df["entity_name"].unique()):
-        if ent in cipla_bubble_ents:
-            entity_colors_b[ent] = "#1d4ed8"
-        else:
-            entity_colors_b[ent] = _avatar_color(b_color_idx)
-            b_color_idx += 1
-
-    # Ordered month labels
-    all_month_labels = (
-        bubble_df[["yyyymm", "month_label"]]
-        .drop_duplicates()
-        .sort_values("yyyymm")["month_label"]
-        .tolist()
-    )
-
-    fig_bubble = go.Figure()
-
-    # Quarterly background bands
-    _qb = [
-        ("Q1 FY25", "Apr 2024", "Jun 2024", "rgba(59,130,246,0.06)"),
-        ("Q2 FY25", "Jul 2024", "Sep 2024", "rgba(16,163,74,0.06)"),
-        ("Q3 FY25", "Oct 2024", "Dec 2024", "rgba(217,119,6,0.06)"),
-        ("Q4 FY25", "Jan 2025", "Mar 2025", "rgba(220,38,38,0.06)"),
-        ("Q1 FY26", "Apr 2025", "Jun 2025", "rgba(59,130,246,0.06)"),
-        ("Q2 FY26", "Jul 2025", "Sep 2025", "rgba(16,163,74,0.06)"),
-        ("Q3 FY26", "Oct 2025", "Dec 2025", "rgba(217,119,6,0.06)"),
-        ("Q4 FY26", "Jan 2026", "Mar 2026", "rgba(220,38,38,0.06)"),
-    ]
-    for q_lbl, q_s, q_e, q_col in _qb:
-        s_in = q_s in all_month_labels
-        e_in = q_e in all_month_labels
-        if s_in or e_in:
-            x0 = q_s if s_in else all_month_labels[0]
-            x1 = q_e if e_in else all_month_labels[-1]
-            fig_bubble.add_vrect(
-                x0=x0, x1=x1,
-                fillcolor=q_col, opacity=1, layer="below", line_width=0,
-                annotation_text=q_lbl, annotation_position="top left",
-                annotation_font_size=9, annotation_font_color="#64748b",
-            )
-
-    for ent in entities_bubble:
-        ent_df = bubble_df[bubble_df["entity_name"] == ent].sort_values("yyyymm")
-        color = entity_colors_b.get(ent, "#64748b")
-        # Cipla traces use "cipla-<molecule>" as the display name
-        trace_name = f"cipla-{selected_mol.lower()}" if ent in cipla_bubble_ents else ent
-        fig_bubble.add_trace(go.Scatter(
-            x=ent_df["month_label"],
-            y=ent_df["wtd_price"],
-            mode="markers",
-            name=trace_name,
-            marker=dict(
-                size=ent_df["bubble_size"].tolist(),
-                sizemode="diameter",
-                sizeref=1,
-                color=color,
-                opacity=0.75,
-                line=dict(width=2, color="white"),
-            ),
-            customdata=list(zip(ent_df["sum_qty"], ent_df["yyyymm"])),
-            hovertemplate=(
-                f"<b>{trace_name}</b><br>"
-                "Month: %{x}<br>"
-                f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
-                f"Volume: %{{customdata[0]:,.0f}} {uom}<extra></extra>"
-            ),
-        ))
-
-    # Cipla reference line
-    if cipla_price > 0 and all_month_labels:
-        fig_bubble.add_hline(
-            y=cipla_price,
-            line_dash="dash", line_color="#1d4ed8", line_width=1.5,
-            annotation_text=f"Cipla ₹{cipla_price:,.0f}",
-            annotation_position="right",
-            annotation_font_size=10, annotation_font_color="#1d4ed8",
+        _f_to_yyyymm = month_label_to_yyyymm.get(
+            st.session_state.get("filter_to_month") or available_months_labels[-1] if available_months_labels else "",
+            available_months_raw[-1] if available_months_raw else "",
         )
+        _f_uoms = st.session_state.get("filter_uoms") or _all_uoms
+        _f_grades = st.session_state.get("filter_grades") or _all_grades
 
-    fig_bubble.update_layout(
-        height=420,
-        paper_bgcolor="white",
-        plot_bgcolor="#fafbff",
-        xaxis_title="Month",
-        yaxis_title=f"Avg Price (₹/{uom})",
-        xaxis=dict(
-            categoryorder="array",
-            categoryarray=all_month_labels,
-            showgrid=True, gridcolor="#e4e9f2", gridwidth=1, griddash="dot",
-        ),
-        yaxis=dict(showgrid=True, gridcolor="#e4e9f2", gridwidth=1, griddash="dot"),
-        legend=dict(
-            orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
-            font=dict(size=10),
-        ),
-        margin=dict(l=10, r=130, t=30, b=10),
-        font=dict(size=11),
-    )
-
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-    _html(f"""
-    <div class="pi-card" style="margin-bottom:0.5rem;">
-      <div class="pi-section-title">Price over Time · Bubble Analysis</div>
-      <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Bubble size = Volume · Colour = Entity</div>
-    </div>
-    """)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-    st.plotly_chart(fig_bubble, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # SECTION 4 — Volume & Price Data Tables
-    # ─────────────────────────────────────────────────────────────────────────
-    st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-    t4_l, t4_r = st.columns(2)
-
-    with t4_l:
-        # Cipla Monthly table — uses full Cipla data (before global month filter)
-        cipla_full_df = consolidated_df[consolidated_df["source"] == "Cipla"]
-        cipla_all_months = sorted(cipla_full_df["yyyymm"].unique())
-
-        # Independent From/To month filter
-        cipla_month_labels = [yyyymm_to_label(m) for m in cipla_all_months]
-        cipla_month_label_to_yyyymm = {yyyymm_to_label(m): m for m in cipla_all_months}
-
-        from_default = st.session_state.get("cipla_from_month") or (cipla_month_labels[0] if cipla_month_labels else None)
-        to_default = st.session_state.get("cipla_to_month") or (cipla_month_labels[-1] if cipla_month_labels else None)
-        if from_default not in cipla_month_labels and cipla_month_labels:
-            from_default = cipla_month_labels[0]
-        if to_default not in cipla_month_labels and cipla_month_labels:
-            to_default = cipla_month_labels[-1]
-
-        cf1, cf2 = st.columns(2)
-        with cf1:
-            from_sel = st.selectbox(
-                "From month",
-                cipla_month_labels,
-                index=cipla_month_labels.index(from_default) if from_default in cipla_month_labels else 0,
-                key="cipla_from_sel",
-            )
-        with cf2:
-            to_sel = st.selectbox(
-                "To month",
-                cipla_month_labels,
-                index=cipla_month_labels.index(to_default) if to_default in cipla_month_labels else max(0, len(cipla_month_labels) - 1),
-                key="cipla_to_sel",
-            )
-
-        if from_sel != st.session_state.get("cipla_from_month") or to_sel != st.session_state.get("cipla_to_month"):
-            st.session_state["cipla_from_month"] = from_sel
-            st.session_state["cipla_to_month"] = to_sel
-            st.session_state["cipla_table_page"] = 1
-            st.rerun()
-
-        from_yyyymm = cipla_month_label_to_yyyymm.get(from_sel, cipla_all_months[0] if cipla_all_months else "")
-        to_yyyymm = cipla_month_label_to_yyyymm.get(to_sel, cipla_all_months[-1] if cipla_all_months else "")
-
-        cipla_filtered_full = cipla_full_df[
-            (cipla_full_df["yyyymm"] >= from_yyyymm) & (cipla_full_df["yyyymm"] <= to_yyyymm)
+        filtered_df = consolidated_df[
+            (consolidated_df["yyyymm"] >= _f_from_yyyymm)
+            & (consolidated_df["yyyymm"] <= _f_to_yyyymm)
+            & (consolidated_df["uom"].isin(_f_uoms))
+            & (consolidated_df["GRADE_SPEC"].isin(_f_grades))
         ]
 
-        cipla_sorted = cipla_filtered_full.sort_values("yyyymm").reset_index(drop=True)
+        # Context label for chart subtitles
+        _from_lbl = yyyymm_to_label(_f_from_yyyymm) if _f_from_yyyymm else "—"
+        _to_lbl = yyyymm_to_label(_f_to_yyyymm) if _f_to_yyyymm else "—"
+        month_context = f"{_from_lbl} – {_to_lbl}" if _from_lbl != _to_lbl else _from_lbl
 
-        # Pagination
-        cipla_pg = st.session_state.get("cipla_table_page", 1)
-        cip_start = (cipla_pg - 1) * _PAGE_SIZE
-        cip_end = cip_start + _PAGE_SIZE
-        cipla_monthly_page = cipla_sorted.iloc[cip_start:cip_end]
+        # ── MATERIAL BANNER ──────────────────────────────────────────────────────
+        export_csv = consolidated_df.to_csv(index=False).encode("utf-8")
 
-        max_qty_idx = cipla_monthly_page["Sum_of_QTY"].idxmax() if len(cipla_monthly_page) > 0 else None
-        min_qty_idx = cipla_monthly_page["Sum_of_QTY"].idxmin() if len(cipla_monthly_page) > 1 else None
+        bann_l, bann_r = st.columns([5, 1])
+        with bann_l:
+            st.markdown(f"""
+            <div class="pi-mat-banner">
+              <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                <div class="pi-mat-icon">🧪</div>
+                <div>
+                  <div class="pi-mat-name">{selected_mol.upper()}</div>
+                  <div style="margin-top:4px;">
+                    <span class="pi-chip">API</span>
+                    <span class="pi-chip">CAS {cas_code[:22]}</span>
+                    <span class="pi-chip">INR / {uom}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with bann_r:
+            st.markdown(
+                '<div class="pi-export-row" style="display:flex;gap:6px;justify-content:flex-end;margin-top:1rem;margin-right:1.5rem;">',
+                unsafe_allow_html=True,
+            )
+            st.download_button(
+                label="Export CSV",
+                data=export_csv,
+                file_name=f"{selected_mol}_all.csv",
+                mime="text/csv",
+                key="excel_export",
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        cip_rows_html = ""
-        for idx_r, row_r in cipla_monthly_page.iterrows():
-            qty_style = ""
-            if max_qty_idx is not None and idx_r == max_qty_idx:
-                qty_style = 'style="color:#16a34a;font-weight:700;"'
-            elif min_qty_idx is not None and idx_r == min_qty_idx and len(cipla_monthly_page) > 1:
-                qty_style = 'style="color:#dc2626;font-weight:700;"'
-            cip_rows_html += f"""
-            <tr>
-              <td>{yyyymm_to_label(row_r["yyyymm"])}</td>
-              <td>{row_r["uom"]}</td>
-              <td>{row_r["GRADE_SPEC"]}</td>
-              <td {qty_style}>{fmt_qty(row_r["Sum_of_QTY"])}</td>
-              <td>{fmt_inr(row_r["Sum_of_TOTAL_VALUE"])}</td>
-              <td style="color:#1d4ed8;font-weight:700;">₹{row_r["Avg_PRICE"]:,.0f}</td>
-            </tr>
-            """
+        # ─────────────────────────────────────────────────────────────────────────
+        # SECTION 1 — 5 KPI Cards with Sparklines
+        # ─────────────────────────────────────────────────────────────────────────
+        cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
+        market_df_f = filtered_df[filtered_df["source"] != "Cipla"]
+        buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
 
-        total_qty_c = cipla_filtered_full["Sum_of_QTY"].sum()
-        total_val_c = cipla_filtered_full["Sum_of_TOTAL_VALUE"].sum()
-        wtd_avg_c = _safe_wtd_avg(cipla_filtered_full["Sum_of_TOTAL_VALUE"], cipla_filtered_full["Sum_of_QTY"])
+        cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
+        market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"])
+        cipla_n_records = len(cipla_df_f)
+        cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
+        market_n_ent = market_df_f["entity_name"].nunique()
 
-        cip_rows_html += f"""
-        <tr class="footer-row">
-          <td>WTD Avg</td>
-          <td>—</td>
-          <td>—</td>
-          <td>{fmt_qty(total_qty_c)}</td>
-          <td>{fmt_inr(total_val_c)}</td>
-          <td style="color:#1d4ed8;font-weight:700;">₹{wtd_avg_c:,.0f}</td>
-        </tr>
-        """
+        # Per-entity WTD avg (buyer-only for Lowest/Highest Competitor cards)
+        low_price = high_price = 0.0
+        low_ent = high_ent = "—"
+        if len(buyer_df_f) > 0:
+            ent_prices = (
+                buyer_df_f.groupby("entity_name")
+                .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
+                .reset_index(name="wtd_price")
+            )
+            ent_prices = ent_prices[ent_prices["wtd_price"] > 0]
+            if len(ent_prices) > 0:
+                min_row = ent_prices.loc[ent_prices["wtd_price"].idxmin()]
+                max_row = ent_prices.loc[ent_prices["wtd_price"].idxmax()]
+                low_price, low_ent = min_row["wtd_price"], min_row["entity_name"]
+                high_price, high_ent = max_row["wtd_price"], max_row["entity_name"]
 
-        _html(f"""
-<div class="pi-card" style="margin-bottom:0.5rem;">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
-<div>
-<div class="pi-section-title">Cipla — Monthly Price &amp; Volume</div>
-<div class="pi-section-sub">api = {selected_mol.upper()} · {from_sel} to {to_sel} · per grade &amp; UOM · Sum QTY · Avg PRICE</div>
-</div>
-<span class="badge badge-blue">ERP</span>
-</div>
-<div style="overflow-x:auto;">
-<table class="pi-data-table">
-<thead>
-<tr>
-<th>PERIOD</th><th>UOM</th><th>GRADE</th>
-<th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th>
-</tr>
-</thead>
-<tbody>{cip_rows_html}</tbody>
-</table>
-</div>
-</div>
-""")
-        _pagination_bar(len(cipla_sorted), _PAGE_SIZE, cipla_pg, "cipla_table_page", "cipla")
+        cost_adv = cipla_price - market_price if market_price > 0 else 0.0
+        cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
 
-    with t4_r:
-        # EXIM Supplier table — sort by qty descending, supplier-only rows
-        supplier_df_f = filtered_df[filtered_df["source"] == "Supplier"]
-        exim_agg = (
-            supplier_df_f.groupby("entity_name")
-            .apply(lambda g: pd.Series({
-                "grade_e":   g["GRADE_SPEC"].mode()[0] if len(g) > 0 else grade,
-                "uom_e":     g["uom"].mode()[0] if len(g) > 0 else uom,
-                "sum_qty":   g["Sum_of_QTY"].sum(),
-                "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
-                "avg_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
-            }))
-            .reset_index()
-            .sort_values("sum_qty", ascending=False)
-            .reset_index(drop=True)
+        # Sparklines — monthly WTD avg across ALL months (consolidated_df, not filtered)
+        months_sorted_all = sorted(consolidated_df["yyyymm"].unique())
+
+        def _monthly_wtd(src_fn, months):
+            vals = []
+            for m in months:
+                mdf = consolidated_df[consolidated_df["yyyymm"] == m]
+                mdf = src_fn(mdf)
+                vals.append(_safe_wtd_avg(mdf["Sum_of_TOTAL_VALUE"], mdf["Sum_of_QTY"]))
+            return vals
+
+        cipla_spark = _render_sparkline(
+            _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
+        )
+        market_spark = _render_sparkline(
+            _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
         )
 
-        # Pagination
-        exim_pg = st.session_state.get("exim_table_page", 1)
-        ex_start = (exim_pg - 1) * _PAGE_SIZE
-        ex_end = ex_start + _PAGE_SIZE
-        exim_page = exim_agg.iloc[ex_start:ex_end]
+        # Cost advantage badge
+        if cipla_price > 0 and market_price > 0:
+            adv_sym = "▼" if cost_adv < 0 else "▲"
+            adv_word = "below" if cost_adv < 0 else "above"
+            adv_text = f"{adv_sym} {cost_pct:.1f}% {adv_word} market"
+        else:
+            adv_text = month_context
 
-        exim_rows_html = ""
-        for _, row_e in exim_page.iterrows():
-            vs_diff = row_e["avg_price"] - cipla_price
-            if cipla_price > 0:
-                if vs_diff < 0:
-                    vs_html = f'<span style="color:#16a34a;font-weight:700;">▼ ₹{abs(vs_diff):,.0f}</span>'
-                    price_style = 'style="color:#16a34a;font-weight:700;"'
-                else:
-                    vs_html = f'<span style="color:#dc2626;font-weight:700;">▲ ₹{vs_diff:,.0f}</span>'
-                    price_style = 'style="color:#dc2626;font-weight:700;"'
+        st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+        k1, k2, k3, k4, k5 = st.columns(5)
+
+        with k1:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#3b82f6;">
+              <div class="pi-kpi-label">Cipla WTD Avg · ERP</div>
+              <div class="pi-kpi-value">₹{cipla_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{month_context}</span></div>
+              <div class="pi-kpi-note">{cipla_n_records} POs · {fmt_qty(cipla_total_qty)} {uom}</div>
+              {cipla_spark}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k2:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#0891b2;">
+              <div class="pi-kpi-label">EXIM Market Avg</div>
+              <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
+              <div class="pi-kpi-note">EXIM data</div>
+              {market_spark}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k3:
+            adv_bg = "#f0fdf4" if cost_adv <= 0 else "#fff1f2"
+            adv_fg = "#16a34a" if cost_adv <= 0 else "#dc2626"
+            adv_sign = "−" if cost_adv < 0 else "+"
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#16a34a;">
+              <div class="pi-kpi-label">Cost Advantage</div>
+              <div class="pi-kpi-value" style="color:{adv_fg};">{adv_sign}₹{abs(cost_adv):,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:{adv_bg};color:{adv_fg};">{adv_text}</span></div>
+              <div class="pi-kpi-note">vs EXIM avg</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k4:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#d97706;">
+              <div class="pi-kpi-label">Lowest Competitor</div>
+              <div class="pi-kpi-value">₹{low_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#fffbeb;color:#d97706;">{low_ent[:22] if low_ent != "—" else "—"}</span></div>
+              <div class="pi-kpi-note">period avg</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k5:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#dc2626;">
+              <div class="pi-kpi-label">Highest Competitor</div>
+              <div class="pi-kpi-value">₹{high_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#fff1f2;color:#dc2626;">{high_ent[:22] if high_ent != "—" else "—"}</span></div>
+              <div class="pi-kpi-note">premium grade</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
+        st.markdown('<div style="height:1.5rem;"></div>', unsafe_allow_html=True)
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # SECTION 2 — Competitor Benchmark (1.5 : 1 layout)
+        # ─────────────────────────────────────────────────────────────────────────
+        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+
+        # Section 2 uses filtered_df (already filtered by global month selector)
+        s2_df = filtered_df
+
+        # Per-entity WTD avg aggregation
+        all_ent_agg = (
+            s2_df.groupby(["entity_name", "source"])
+            .apply(lambda g: pd.Series({
+                "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                "total_qty": g["Sum_of_QTY"].sum(),
+            }))
+            .reset_index()
+        )
+        all_ent_agg = all_ent_agg[all_ent_agg["wtd_price"] > 0]
+
+        cipla_ent_row = all_ent_agg[all_ent_agg["source"] == "Cipla"]
+        non_cipla_rows = all_ent_agg[all_ent_agg["source"] == "Buyer"].sort_values("wtd_price").reset_index(drop=True)
+        cipla_bar_price = cipla_ent_row["wtd_price"].mean() if len(cipla_ent_row) > 0 else cipla_price
+
+        # Bar chart data
+        s2_market_df = s2_df[s2_df["source"] != "Cipla"]
+        s2_market_price = _safe_wtd_avg(s2_market_df["Sum_of_TOTAL_VALUE"], s2_market_df["Sum_of_QTY"])
+
+        bar_items_competitor = []
+        for _, row in non_cipla_rows.iterrows():
+            bar_items_competitor.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
+
+        cipla_bar_item = None
+        market_bar_item = None
+        if len(cipla_ent_row) > 0:
+            cipla_bar_item = {"entity": "★ Cipla", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()}
+        if s2_market_price > 0:
+            market_bar_item = {"entity": "EXIM Avg", "price": s2_market_price, "type": "market", "qty": s2_market_df["Sum_of_QTY"].sum()}
+
+        def _bar_width(price, min_p, max_p):
+            price_range = max_p - min_p if max_p > min_p else 1
+            return int(40 + (price - min_p) / price_range * 55)
+
+        s2_left, s2_right = st.columns([3, 2])
+
+        with s2_left:
+            # ── Top 25% toggle ────────────────────────────────────────────────────
+            bar_view = st.radio(
+                "View mode",
+                ["Top 25% by Volume", "All Competitors"],
+                index=0 if st.session_state["bar_view_mode"] == "Top 25% by Volume" else 1,
+                key="bar_view_radio",
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+            if bar_view != st.session_state["bar_view_mode"]:
+                st.session_state["bar_view_mode"] = bar_view
+                st.session_state["bar_page"] = 1
+                st.rerun()
+
+            # Determine which competitors to show
+            if bar_view == "Top 25% by Volume" and len(non_cipla_rows) > 0:
+                volumes = non_cipla_rows["total_qty"].values
+                threshold = np.percentile(volumes, 75)
+                top25_rows = non_cipla_rows[non_cipla_rows["total_qty"] >= threshold]
+                if len(top25_rows) == 0:
+                    top25_rows = non_cipla_rows
+                display_competitors = top25_rows.reset_index(drop=True)
             else:
-                vs_html = "—"
-                price_style = ""
-            exim_rows_html += f"""
-            <tr>
-              <td style="font-weight:500;">{row_e["entity_name"][:26]}</td>
-              <td>{row_e["grade_e"]}</td>
-              <td>{fmt_qty(row_e["sum_qty"])}</td>
-              <td>{fmt_inr(row_e["total_val"])}</td>
-              <td {price_style}>₹{row_e["avg_price"]:,.0f}</td>
-              <td>{vs_html}</td>
+                display_competitors = non_cipla_rows
+
+            # Pagination for "All Competitors" mode
+            if bar_view == "All Competitors":
+                bar_page = st.session_state.get("bar_page", 1)
+                total_comp = len(display_competitors)
+                page_size = _PAGE_SIZE
+                start = (bar_page - 1) * page_size
+                end = start + page_size
+                page_competitors = display_competitors.iloc[start:end]
+            else:
+                page_competitors = display_competitors
+
+            # Build the full bar items list for display
+            bar_items_display = []
+            for _, row in page_competitors.iterrows():
+                bar_items_display.append({"entity": row["entity_name"], "price": row["wtd_price"], "type": "competitor", "qty": row["total_qty"]})
+            if cipla_bar_item:
+                bar_items_display.append(cipla_bar_item)
+            if market_bar_item:
+                bar_items_display.append(market_bar_item)
+
+            bar_items_sorted = sorted(bar_items_display, key=lambda x: x["price"])
+
+            if bar_items_sorted:
+                prices_all = [r["price"] for r in bar_items_sorted]
+                min_p = min(prices_all)
+                max_p = max(prices_all)
+            else:
+                min_p = max_p = 0
+
+            # Build HTML bar chart
+            bar_html = f"""
+            <div class="pi-card" style="margin-bottom:0.5rem;">
+              <div class="pi-section-title">WTD Average Price Comparison (₹/{uom})</div>
+              <div class="pi-section-sub">Cipla vs competitors · {month_context}</div>
+              <div style="padding:0.2rem 0;">
+            """
+            for r in bar_items_sorted:
+                pct = _bar_width(r["price"], min_p, max_p)
+                ent_display = r["entity"]
+                price_val = r["price"]
+                if r["type"] == "cipla":
+                    fill = f"background:linear-gradient(90deg,#1d4ed8,#3b82f6);width:{pct}%"
+                    lbl_cls = "cipla"
+                    badge = '<span class="badge badge-blue">Benchmark</span>'
+                elif r["type"] == "market":
+                    fill = f"background:rgba(8,145,178,0.35);width:{pct}%"
+                    lbl_cls = ""
+                    badge = '<span class="badge badge-cyan">EXIM Avg</span>'
+                else:
+                    vs = ((price_val - cipla_bar_price) / cipla_bar_price * 100) if cipla_bar_price > 0 else 0
+                    if vs < 0:
+                        fill = f"background:linear-gradient(90deg,#15803d,#16a34a);width:{pct}%"
+                        badge = f'<span style="color:#16a34a;font-weight:700;">▼ {abs(vs):.1f}%</span>'
+                    elif vs > 15:
+                        fill = f"background:linear-gradient(90deg,#b91c1c,#dc2626);width:{pct}%"
+                        badge = f'<span style="color:#dc2626;font-weight:700;">▲ {vs:.1f}%</span>'
+                    else:
+                        fill = f"background:linear-gradient(90deg,#b45309,#d97706);width:{pct}%"
+                        badge = f'<span style="color:#d97706;font-weight:700;">▲ {vs:.1f}%</span>'
+                    lbl_cls = ""
+
+                bar_html += f"""
+                <div class="pi-bar-row">
+                  <div class="pi-bar-label {lbl_cls}">{ent_display[:30]}</div>
+                  <div class="pi-bar-track">
+                    <div class="pi-bar-fill" style="{fill}"></div>
+                  </div>
+                  <div class="pi-bar-price">₹{price_val:,.0f}</div>
+                  <div class="pi-bar-badge">{badge}</div>
+                </div>
+                """
+
+            if bar_items_sorted:
+                mid_p = (min_p + max_p) / 2
+                bar_html += f"""
+                <div class="pi-bar-scale">
+                  <span>₹{min_p:,.0f}</span>
+                  <span>₹{mid_p:,.0f}</span>
+                  <span>₹{max_p:,.0f}</span>
+                </div>
+                """
+            else:
+                bar_html += "<p style='color:var(--t3);'>No data available.</p>"
+
+            bar_html += "</div></div>"
+            _html(bar_html)
+
+            # Pagination (only for "All Competitors" mode)
+            if bar_view == "All Competitors":
+                _pagination_bar(len(display_competitors), _PAGE_SIZE, st.session_state.get("bar_page", 1), "bar_page", "bar")
+
+        with s2_right:
+            # Competitor detail table — sort by volume descending, Cipla pinned at top
+            non_cipla_by_vol = non_cipla_rows.sort_values("total_qty", ascending=False).reset_index(drop=True)
+
+            # Cipla row first
+            table_rows = ""
+            if len(cipla_ent_row) > 0:
+                cipla_ent_name = cipla_ent_row.iloc[0]["entity_name"]
+                cipla_qty_disp = cipla_ent_row["total_qty"].sum()
+                table_rows += f"""
+                <tr class="cipla-row">
+                  <td>
+                    <div style="display:flex;align-items:center;gap:7px;">
+                      <div class="pi-av" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);">CI</div>
+                      <div>
+                        <div style="font-weight:700;color:#1d4ed8;">{cipla_ent_name[:20]}</div>
+                        <div style="font-size:0.65rem;color:#64748b;">ERP</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="font-weight:700;color:#1d4ed8;">₹{cipla_bar_price:,.0f}</td>
+                  <td>{fmt_qty(cipla_qty_disp)}</td>
+                  <td>—</td>
+                  <td><span class="badge badge-blue">Ref</span></td>
+                </tr>
+                """
+
+            # Paginated non-Cipla rows
+            comp_page = st.session_state.get("comp_table_page", 1)
+            ct_start = (comp_page - 1) * _PAGE_SIZE
+            ct_end = ct_start + _PAGE_SIZE
+            page_non_cipla = non_cipla_by_vol.iloc[ct_start:ct_end]
+
+            for idx, (_, row) in enumerate(page_non_cipla.iterrows()):
+                ent = row["entity_name"]
+                price = row["wtd_price"]
+                qty = row["total_qty"]
+                vs_pct = ((price - cipla_bar_price) / cipla_bar_price * 100) if cipla_bar_price > 0 else 0
+                av_col = _avatar_color(ct_start + idx)
+                av_ini = _initials(ent)
+                if vs_pct < 0:
+                    vs_html = f'<span style="color:#16a34a;font-weight:700;">▼ {abs(vs_pct):.1f}%</span>'
+                    pos = '<span class="badge badge-green">Cheaper</span>'
+                elif vs_pct > 15:
+                    vs_html = f'<span style="color:#dc2626;font-weight:700;">▲ {vs_pct:.1f}%</span>'
+                    pos = '<span class="badge badge-red">Premium</span>'
+                else:
+                    vs_html = f'<span style="color:#d97706;font-weight:700;">▲ {vs_pct:.1f}%</span>'
+                    pos = '<span class="badge badge-amber">Higher</span>'
+                table_rows += f"""
+                <tr>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:7px;">
+                      <div class="pi-av" style="background:{av_col};">{av_ini}</div>
+                      <div>
+                        <div style="font-weight:500;">{ent[:20]}</div>
+                        <div style="font-size:0.65rem;color:#64748b;">EXIM</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>₹{price:,.0f}</td>
+                  <td>{fmt_qty(qty)}</td>
+                  <td>{vs_html}</td>
+                  <td>{pos}</td>
+                </tr>
+                """
+
+            comp_table = f"""
+            <div class="pi-card" style="margin-bottom:0.5rem;">
+              <div class="pi-section-title">Price &amp; Volume Summary</div>
+              <div class="pi-section-sub">Per entity · WTD average price · {month_context}</div>
+              <div style="overflow-x:auto;">
+              <table class="pi-comp-table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>WTD Avg</th>
+                    <th>Volume ({uom})</th>
+                    <th>vs Cipla</th>
+                    <th>Position</th>
+                  </tr>
+                </thead>
+                <tbody>{table_rows}</tbody>
+              </table>
+              </div>
+            </div>
+            """
+            _html(comp_table)
+            _pagination_bar(len(non_cipla_by_vol), _PAGE_SIZE, comp_page, "comp_table_page", "comp")
+
+        st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # SECTION 3 — Bubble Chart (Price over Time)
+        # ─────────────────────────────────────────────────────────────────────────
+        # Group by entity + yyyymm (buyer-only for competitors, plus Cipla)
+        bubble_df = (
+            filtered_df[filtered_df["source"].isin(["Buyer", "Cipla"])].groupby(["entity_name", "yyyymm", "source"])
+            .apply(lambda g: pd.Series({
+                "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                "sum_qty":   g["Sum_of_QTY"].sum(),
+                "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
+            }))
+            .reset_index()
+        )
+        bubble_df = bubble_df[bubble_df["wtd_price"] > 0].copy()
+        bubble_df["month_label"] = bubble_df["yyyymm"].apply(yyyymm_to_label)
+
+        cipla_bubble_ents = set(bubble_df[bubble_df["source"] == "Cipla"]["entity_name"].unique())
+
+        # Top 25% by value: total value per entity across filtered_df
+        ent_total_val = bubble_df.groupby("entity_name")["total_val"].sum()
+        non_cipla_ents_b = [e for e in ent_total_val.index if e not in cipla_bubble_ents]
+        if non_cipla_ents_b:
+            val_threshold = np.percentile(ent_total_val[non_cipla_ents_b].values, 75)
+            top25_ents_b = set(e for e in non_cipla_ents_b if ent_total_val[e] >= val_threshold)
+        else:
+            top25_ents_b = set()
+        # Always include Cipla entities
+        entities_bubble = sorted(top25_ents_b | cipla_bubble_ents)
+
+        # Scale bubble sizes: sqrt(qty / max_qty) * 60 + 10
+        max_qty_b = bubble_df["sum_qty"].max() if bubble_df["sum_qty"].max() > 0 else 1
+        bubble_df["bubble_size"] = ((bubble_df["sum_qty"] / max_qty_b) ** 0.5) * 60 + 10
+
+        # Color map
+        entity_colors_b = {}
+        b_color_idx = 0
+        for ent in sorted(bubble_df["entity_name"].unique()):
+            if ent in cipla_bubble_ents:
+                entity_colors_b[ent] = "#1d4ed8"
+            else:
+                entity_colors_b[ent] = _avatar_color(b_color_idx)
+                b_color_idx += 1
+
+        # Ordered month labels
+        all_month_labels = (
+            bubble_df[["yyyymm", "month_label"]]
+            .drop_duplicates()
+            .sort_values("yyyymm")["month_label"]
+            .tolist()
+        )
+
+        fig_bubble = go.Figure()
+
+        # Quarterly background bands
+        _qb = [
+            ("Q1 FY25", "Apr 2024", "Jun 2024", "rgba(59,130,246,0.06)"),
+            ("Q2 FY25", "Jul 2024", "Sep 2024", "rgba(16,163,74,0.06)"),
+            ("Q3 FY25", "Oct 2024", "Dec 2024", "rgba(217,119,6,0.06)"),
+            ("Q4 FY25", "Jan 2025", "Mar 2025", "rgba(220,38,38,0.06)"),
+            ("Q1 FY26", "Apr 2025", "Jun 2025", "rgba(59,130,246,0.06)"),
+            ("Q2 FY26", "Jul 2025", "Sep 2025", "rgba(16,163,74,0.06)"),
+            ("Q3 FY26", "Oct 2025", "Dec 2025", "rgba(217,119,6,0.06)"),
+            ("Q4 FY26", "Jan 2026", "Mar 2026", "rgba(220,38,38,0.06)"),
+        ]
+        for q_lbl, q_s, q_e, q_col in _qb:
+            s_in = q_s in all_month_labels
+            e_in = q_e in all_month_labels
+            if s_in or e_in:
+                x0 = q_s if s_in else all_month_labels[0]
+                x1 = q_e if e_in else all_month_labels[-1]
+                fig_bubble.add_vrect(
+                    x0=x0, x1=x1,
+                    fillcolor=q_col, opacity=1, layer="below", line_width=0,
+                    annotation_text=q_lbl, annotation_position="top left",
+                    annotation_font_size=9, annotation_font_color="#64748b",
+                )
+
+        for ent in entities_bubble:
+            ent_df = bubble_df[bubble_df["entity_name"] == ent].sort_values("yyyymm")
+            color = entity_colors_b.get(ent, "#64748b")
+            # Cipla traces use "cipla-<molecule>" as the display name
+            trace_name = f"cipla-{selected_mol.lower()}" if ent in cipla_bubble_ents else ent
+            fig_bubble.add_trace(go.Scatter(
+                x=ent_df["month_label"],
+                y=ent_df["wtd_price"],
+                mode="markers",
+                name=trace_name,
+                marker=dict(
+                    size=ent_df["bubble_size"].tolist(),
+                    sizemode="diameter",
+                    sizeref=1,
+                    color=color,
+                    opacity=0.75,
+                    line=dict(width=2, color="white"),
+                ),
+                customdata=list(zip(ent_df["sum_qty"], ent_df["yyyymm"])),
+                hovertemplate=(
+                    f"<b>{trace_name}</b><br>"
+                    "Month: %{x}<br>"
+                    f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
+                    f"Volume: %{{customdata[0]:,.0f}} {uom}<extra></extra>"
+                ),
+            ))
+
+        # Cipla reference line
+        if cipla_price > 0 and all_month_labels:
+            fig_bubble.add_hline(
+                y=cipla_price,
+                line_dash="dash", line_color="#1d4ed8", line_width=1.5,
+                annotation_text=f"Cipla ₹{cipla_price:,.0f}",
+                annotation_position="right",
+                annotation_font_size=10, annotation_font_color="#1d4ed8",
+            )
+
+        fig_bubble.update_layout(
+            height=420,
+            paper_bgcolor="white",
+            plot_bgcolor="#fafbff",
+            xaxis_title="Month",
+            yaxis_title=f"Avg Price (₹/{uom})",
+            xaxis=dict(
+                categoryorder="array",
+                categoryarray=all_month_labels,
+                showgrid=True, gridcolor="#e4e9f2", gridwidth=1, griddash="dot",
+            ),
+            yaxis=dict(showgrid=True, gridcolor="#e4e9f2", gridwidth=1, griddash="dot"),
+            legend=dict(
+                orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
+                font=dict(size=10),
+            ),
+            margin=dict(l=10, r=130, t=30, b=10),
+            font=dict(size=11),
+        )
+
+        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+        _html(f"""
+        <div class="pi-card" style="margin-bottom:0.5rem;">
+          <div class="pi-section-title">Price over Time · Bubble Analysis</div>
+          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Bubble size = Volume · Colour = Entity</div>
+        </div>
+        """)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+        st.plotly_chart(fig_bubble, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # SECTION 4 — Volume & Price Data Tables
+        # ─────────────────────────────────────────────────────────────────────────
+        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+        t4_l, t4_r = st.columns(2)
+
+        with t4_l:
+            # Cipla Monthly table — uses full Cipla data (before global month filter)
+            cipla_full_df = consolidated_df[consolidated_df["source"] == "Cipla"]
+            cipla_all_months = sorted(cipla_full_df["yyyymm"].unique())
+
+            # Independent From/To month filter
+            cipla_month_labels = [yyyymm_to_label(m) for m in cipla_all_months]
+            cipla_month_label_to_yyyymm = {yyyymm_to_label(m): m for m in cipla_all_months}
+
+            from_default = st.session_state.get("cipla_from_month") or (cipla_month_labels[0] if cipla_month_labels else None)
+            to_default = st.session_state.get("cipla_to_month") or (cipla_month_labels[-1] if cipla_month_labels else None)
+            if from_default not in cipla_month_labels and cipla_month_labels:
+                from_default = cipla_month_labels[0]
+            if to_default not in cipla_month_labels and cipla_month_labels:
+                to_default = cipla_month_labels[-1]
+
+            cf1, cf2 = st.columns(2)
+            with cf1:
+                from_sel = st.selectbox(
+                    "From month",
+                    cipla_month_labels,
+                    index=cipla_month_labels.index(from_default) if from_default in cipla_month_labels else 0,
+                    key="cipla_from_sel",
+                )
+            with cf2:
+                to_sel = st.selectbox(
+                    "To month",
+                    cipla_month_labels,
+                    index=cipla_month_labels.index(to_default) if to_default in cipla_month_labels else max(0, len(cipla_month_labels) - 1),
+                    key="cipla_to_sel",
+                )
+
+            if from_sel != st.session_state.get("cipla_from_month") or to_sel != st.session_state.get("cipla_to_month"):
+                st.session_state["cipla_from_month"] = from_sel
+                st.session_state["cipla_to_month"] = to_sel
+                st.session_state["cipla_table_page"] = 1
+                st.rerun()
+
+            from_yyyymm = cipla_month_label_to_yyyymm.get(from_sel, cipla_all_months[0] if cipla_all_months else "")
+            to_yyyymm = cipla_month_label_to_yyyymm.get(to_sel, cipla_all_months[-1] if cipla_all_months else "")
+
+            cipla_filtered_full = cipla_full_df[
+                (cipla_full_df["yyyymm"] >= from_yyyymm) & (cipla_full_df["yyyymm"] <= to_yyyymm)
+            ]
+
+            cipla_sorted = cipla_filtered_full.sort_values("yyyymm").reset_index(drop=True)
+
+            # Pagination
+            cipla_pg = st.session_state.get("cipla_table_page", 1)
+            cip_start = (cipla_pg - 1) * _PAGE_SIZE
+            cip_end = cip_start + _PAGE_SIZE
+            cipla_monthly_page = cipla_sorted.iloc[cip_start:cip_end]
+
+            max_qty_idx = cipla_monthly_page["Sum_of_QTY"].idxmax() if len(cipla_monthly_page) > 0 else None
+            min_qty_idx = cipla_monthly_page["Sum_of_QTY"].idxmin() if len(cipla_monthly_page) > 1 else None
+
+            cip_rows_html = ""
+            for idx_r, row_r in cipla_monthly_page.iterrows():
+                qty_style = ""
+                if max_qty_idx is not None and idx_r == max_qty_idx:
+                    qty_style = 'style="color:#16a34a;font-weight:700;"'
+                elif min_qty_idx is not None and idx_r == min_qty_idx and len(cipla_monthly_page) > 1:
+                    qty_style = 'style="color:#dc2626;font-weight:700;"'
+                cip_rows_html += f"""
+                <tr>
+                  <td>{yyyymm_to_label(row_r["yyyymm"])}</td>
+                  <td>{row_r["uom"]}</td>
+                  <td>{row_r["GRADE_SPEC"]}</td>
+                  <td {qty_style}>{fmt_qty(row_r["Sum_of_QTY"])}</td>
+                  <td>{fmt_inr(row_r["Sum_of_TOTAL_VALUE"])}</td>
+                  <td style="color:#1d4ed8;font-weight:700;">₹{row_r["Avg_PRICE"]:,.0f}</td>
+                </tr>
+                """
+
+            total_qty_c = cipla_filtered_full["Sum_of_QTY"].sum()
+            total_val_c = cipla_filtered_full["Sum_of_TOTAL_VALUE"].sum()
+            wtd_avg_c = _safe_wtd_avg(cipla_filtered_full["Sum_of_TOTAL_VALUE"], cipla_filtered_full["Sum_of_QTY"])
+
+            cip_rows_html += f"""
+            <tr class="footer-row">
+              <td>WTD Avg</td>
+              <td>—</td>
+              <td>—</td>
+              <td>{fmt_qty(total_qty_c)}</td>
+              <td>{fmt_inr(total_val_c)}</td>
+              <td style="color:#1d4ed8;font-weight:700;">₹{wtd_avg_c:,.0f}</td>
             </tr>
             """
 
-        total_qty_e = supplier_df_f["Sum_of_QTY"].sum()
-        total_val_e = supplier_df_f["Sum_of_TOTAL_VALUE"].sum()
-        wtd_avg_e = _safe_wtd_avg(supplier_df_f["Sum_of_TOTAL_VALUE"], supplier_df_f["Sum_of_QTY"])
-        vs_footer_diff = wtd_avg_e - cipla_price
-        if cipla_price > 0:
-            vs_footer = (
-                f'<span style="color:#16a34a;font-weight:700;">▼ ₹{abs(vs_footer_diff):,.0f}</span>'
-                if vs_footer_diff < 0
-                else f'<span style="color:#dc2626;font-weight:700;">▲ ₹{vs_footer_diff:,.0f}</span>'
-            )
-        else:
-            vs_footer = "—"
-
-        exim_rows_html += f"""
-        <tr class="footer-row">
-          <td>EXIM WTD Avg</td>
-          <td>—</td>
-          <td>{fmt_qty(total_qty_e)}</td>
-          <td>{fmt_inr(total_val_e)}</td>
-          <td>₹{wtd_avg_e:,.0f}</td>
-          <td>{vs_footer}</td>
-        </tr>
-        """
-
-        _html(f"""
-<div class="pi-card" style="margin-bottom:0.5rem;">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
-<div>
-<div class="pi-section-title">EXIM — Supplier Price &amp; Volume</div>
-<div class="pi-section-sub">supplier · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
-</div>
-<span class="badge badge-cyan">EXIM</span>
-</div>
-<div style="overflow-x:auto;">
-<table class="pi-data-table">
-<thead>
-<tr>
-<th>SUPPLIER</th><th>GRADE</th>
-<th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th><th>VS CIPLA</th>
-</tr>
-</thead>
-<tbody>{exim_rows_html}</tbody>
-</table>
-</div>
-</div>
-""")
-        _pagination_bar(len(exim_agg), _PAGE_SIZE, exim_pg, "exim_table_page", "exim")
-
-    st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # FOOTER
-    # ─────────────────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="pi-footer">
-      <div>
-        <span style="font-size:1.2rem;margin-right:0.5rem;">💊</span>
-        PharmaIntel | Price Benchmarking Intelligence Platform |
-        Data Sources: Internal ERP · EXIM Trade Data |
-        Confidential — For Internal Use Only
-      </div>
-      <div>
-        <a href="#">Documentation</a>
-        <a href="#">Export</a>
-        <a href="#">Support</a>
-        <a href="#">© 2026 Cipla Ltd</a>
-      </div>
+            _html(f"""
+    <div class="pi-card" style="margin-bottom:0.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+    <div>
+    <div class="pi-section-title">Cipla — Monthly Price &amp; Volume</div>
+    <div class="pi-section-sub">api = {selected_mol.upper()} · {from_sel} to {to_sel} · per grade &amp; UOM · Sum QTY · Avg PRICE</div>
     </div>
-    """, unsafe_allow_html=True)
+    <span class="badge badge-blue">ERP</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="pi-data-table">
+    <thead>
+    <tr>
+    <th>PERIOD</th><th>UOM</th><th>GRADE</th>
+    <th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th>
+    </tr>
+    </thead>
+    <tbody>{cip_rows_html}</tbody>
+    </table>
+    </div>
+    </div>
+    """)
+            _pagination_bar(len(cipla_sorted), _PAGE_SIZE, cipla_pg, "cipla_table_page", "cipla")
+
+        with t4_r:
+            # EXIM Supplier table — sort by qty descending, supplier-only rows
+            supplier_df_f = filtered_df[filtered_df["source"] == "Supplier"]
+            exim_agg = (
+                supplier_df_f.groupby("entity_name")
+                .apply(lambda g: pd.Series({
+                    "grade_e":   g["GRADE_SPEC"].mode()[0] if len(g) > 0 else grade,
+                    "uom_e":     g["uom"].mode()[0] if len(g) > 0 else uom,
+                    "sum_qty":   g["Sum_of_QTY"].sum(),
+                    "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
+                    "avg_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                }))
+                .reset_index()
+                .sort_values("sum_qty", ascending=False)
+                .reset_index(drop=True)
+            )
+
+            # Pagination
+            exim_pg = st.session_state.get("exim_table_page", 1)
+            ex_start = (exim_pg - 1) * _PAGE_SIZE
+            ex_end = ex_start + _PAGE_SIZE
+            exim_page = exim_agg.iloc[ex_start:ex_end]
+
+            exim_rows_html = ""
+            for _, row_e in exim_page.iterrows():
+                vs_diff = row_e["avg_price"] - cipla_price
+                if cipla_price > 0:
+                    if vs_diff < 0:
+                        vs_html = f'<span style="color:#16a34a;font-weight:700;">▼ ₹{abs(vs_diff):,.0f}</span>'
+                        price_style = 'style="color:#16a34a;font-weight:700;"'
+                    else:
+                        vs_html = f'<span style="color:#dc2626;font-weight:700;">▲ ₹{vs_diff:,.0f}</span>'
+                        price_style = 'style="color:#dc2626;font-weight:700;"'
+                else:
+                    vs_html = "—"
+                    price_style = ""
+                exim_rows_html += f"""
+                <tr>
+                  <td style="font-weight:500;">{row_e["entity_name"][:26]}</td>
+                  <td>{row_e["grade_e"]}</td>
+                  <td>{fmt_qty(row_e["sum_qty"])}</td>
+                  <td>{fmt_inr(row_e["total_val"])}</td>
+                  <td {price_style}>₹{row_e["avg_price"]:,.0f}</td>
+                  <td>{vs_html}</td>
+                </tr>
+                """
+
+            total_qty_e = supplier_df_f["Sum_of_QTY"].sum()
+            total_val_e = supplier_df_f["Sum_of_TOTAL_VALUE"].sum()
+            wtd_avg_e = _safe_wtd_avg(supplier_df_f["Sum_of_TOTAL_VALUE"], supplier_df_f["Sum_of_QTY"])
+            vs_footer_diff = wtd_avg_e - cipla_price
+            if cipla_price > 0:
+                vs_footer = (
+                    f'<span style="color:#16a34a;font-weight:700;">▼ ₹{abs(vs_footer_diff):,.0f}</span>'
+                    if vs_footer_diff < 0
+                    else f'<span style="color:#dc2626;font-weight:700;">▲ ₹{vs_footer_diff:,.0f}</span>'
+                )
+            else:
+                vs_footer = "—"
+
+            exim_rows_html += f"""
+            <tr class="footer-row">
+              <td>EXIM WTD Avg</td>
+              <td>—</td>
+              <td>{fmt_qty(total_qty_e)}</td>
+              <td>{fmt_inr(total_val_e)}</td>
+              <td>₹{wtd_avg_e:,.0f}</td>
+              <td>{vs_footer}</td>
+            </tr>
+            """
+
+            _html(f"""
+    <div class="pi-card" style="margin-bottom:0.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+    <div>
+    <div class="pi-section-title">EXIM — Supplier Price &amp; Volume</div>
+    <div class="pi-section-sub">supplier · {month_context} · {uom} · Grade · Sum QTY · Avg PRICE</div>
+    </div>
+    <span class="badge badge-cyan">EXIM</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="pi-data-table">
+    <thead>
+    <tr>
+    <th>SUPPLIER</th><th>GRADE</th>
+    <th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th><th>VS CIPLA</th>
+    </tr>
+    </thead>
+    <tbody>{exim_rows_html}</tbody>
+    </table>
+    </div>
+    </div>
+    """)
+            _pagination_bar(len(exim_agg), _PAGE_SIZE, exim_pg, "exim_table_page", "exim")
+
+        st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # FOOTER
+        # ─────────────────────────────────────────────────────────────────────────
+        st.markdown("""
+        <div class="pi-footer">
+          <div>
+            <span style="font-size:1.2rem;margin-right:0.5rem;">💊</span>
+            PharmaIntel | Price Benchmarking Intelligence Platform |
+            Data Sources: Internal ERP · EXIM Trade Data |
+            Confidential — For Internal Use Only
+          </div>
+          <div>
+            <a href="#">Documentation</a>
+            <a href="#">Export</a>
+            <a href="#">Support</a>
+            <a href="#">© 2026 Cipla Ltd</a>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ─── LANDING PAGE (no molecule selected) ─────────────────────────────────────
 else:
