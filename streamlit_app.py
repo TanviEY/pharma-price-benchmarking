@@ -417,7 +417,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   box-shadow: 0 2px 10px rgba(0,0,0,0.06);
   padding: 1.2rem 1.4rem;
 }
-.pi-section-hdr {
+.pi-section-hdr,
+.pi-section-header {
   font-size:0.7rem; font-weight:700; color:var(--t3);
   text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.2rem;
 }
@@ -1352,16 +1353,16 @@ if st.session_state.selected_molecule:
         _html('<div style="height:1rem;"></div>')
 
         # ─────────────────────────────────────────────────────────────────────────
-        # LLM PANEL 3 — Supplier Volume Analytics
+        # LLM PANEL 3 — Supplier Avg Price Analytics
         # ─────────────────────────────────────────────────────────────────────────
         _p3_supplier_df = filtered_df[filtered_df["source"] == "Supplier"]
 
         _html(f"""
         <div class="pi-page-body">
         <div class="pi-card">
-        <div class="pi-section-header">SUPPLIER VOLUME ANALYTICS</div>
-        <div class="pi-section-title">Supplier Volume Trends — Growth &amp; Decline</div>
-        <div class="pi-section-sub">Supplier perspective · {month_context} · {uom}</div>
+        <div class="pi-section-header">SUPPLIER AVG PRICE ANALYTICS</div>
+        <div class="pi-section-title">Supplier Avg Price Trends — Monthly Comparison</div>
+        <div class="pi-section-sub">Supplier perspective · {month_context} · ₹/{uom}</div>
         """)
 
         if len(_p3_supplier_df) == 0:
@@ -1380,64 +1381,55 @@ if st.session_state.selected_molecule:
                     "month_count": g["yyyymm"].nunique(),
                 }))
                 .reset_index()
-                .sort_values("total_qty", ascending=False)
+                .sort_values("wtd_price", ascending=False)
             )
 
-            # Top 5 suppliers for stacked bar
+            # Top 5 suppliers by avg price for line chart
             _p3_top5 = _p3_totals.head(5)["entity_name"].tolist()
 
-            # Compute MoM trend per supplier
+            # Compute MoM trend per supplier based on monthly avg price
             def _p3_supplier_trend(sup_name):
                 _sd = _p3_supplier_df[_p3_supplier_df["entity_name"] == sup_name]
-                _sm = _sd.groupby("yyyymm")["Sum_of_QTY"].sum().sort_index()
+                _sm = (
+                    _sd.groupby("yyyymm")
+                    .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
+                    .sort_index()
+                )
+                _sm = _sm[_sm > 0]
                 if len(_sm) < 2:
                     return "Stable"
                 _pct_changes = _sm.pct_change().dropna() * 100
                 _avg_mom = _pct_changes.mean()
                 if _avg_mom > _GROWTH_THRESHOLD:
-                    return "Growing"
+                    return "Rising"
                 elif _avg_mom < _DECLINE_THRESHOLD:
-                    return "Declining"
+                    return "Falling"
                 return "Stable"
 
             _p3_totals["trend"] = _p3_totals["entity_name"].apply(_p3_supplier_trend)
 
-            # Stacked bar chart
+            # Line chart — monthly avg price per top-5 supplier
             _p3_fig = go.Figure()
             for _idx, _sup in enumerate(_p3_top5):
-                _sup_monthly = []
+                _sup_monthly_price = []
                 for _m in _p3_months:
                     _sdf = _p3_supplier_df[
                         (_p3_supplier_df["entity_name"] == _sup) & (_p3_supplier_df["yyyymm"] == _m)
                     ]
-                    _sup_monthly.append(_sdf["Sum_of_QTY"].sum())
-                _p3_fig.add_trace(go.Bar(
-                    name=_sup, x=_p3_labels, y=_sup_monthly,
-                    marker_color=_avatar_color(_idx),
-                ))
-
-            # "Others" bar
-            _p3_others_monthly = []
-            for _m in _p3_months:
-                _all_m = _p3_supplier_df[_p3_supplier_df["yyyymm"] == _m]["Sum_of_QTY"].sum()
-                _top5_m = sum(
-                    _p3_supplier_df[
-                        (_p3_supplier_df["entity_name"] == _sup) & (_p3_supplier_df["yyyymm"] == _m)
-                    ]["Sum_of_QTY"].sum()
-                    for _sup in _p3_top5
-                )
-                _p3_others_monthly.append(max(0, _all_m - _top5_m))
-            if any(v > 0 for v in _p3_others_monthly):
-                _p3_fig.add_trace(go.Bar(
-                    name="Others", x=_p3_labels, y=_p3_others_monthly,
-                    marker_color="#94a3b8",
+                    _sup_monthly_price.append(_safe_wtd_avg(_sdf["Sum_of_TOTAL_VALUE"], _sdf["Sum_of_QTY"]))
+                _p3_fig.add_trace(go.Scatter(
+                    name=_sup, x=_p3_labels, y=_sup_monthly_price,
+                    mode="lines+markers",
+                    line=dict(color=_avatar_color(_idx), width=2),
+                    marker=dict(size=6),
+                    connectgaps=True,
                 ))
 
             _p3_fig.update_layout(
-                barmode="stack", height=300,
+                height=300,
                 paper_bgcolor="white", plot_bgcolor="white",
                 margin=dict(l=40, r=20, t=20, b=40),
-                yaxis_title=f"Volume ({uom})",
+                yaxis_title=f"Avg Price (₹/{uom})",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.plotly_chart(_p3_fig, use_container_width=True)
@@ -1445,8 +1437,9 @@ if st.session_state.selected_molecule:
             # Supplier summary table (top 10)
             _p3_display = _p3_totals.head(10)
             _trend_badge = {
-                "Growing": '<span class="badge-green">📈 Growing</span>',
-                "Declining": '<span class="badge-red">📉 Declining</span>',
+                # Procurement perspective: rising prices = bad (red), falling prices = good (green)
+                "Rising": '<span class="badge-red">📈 Rising</span>',
+                "Falling": '<span class="badge-green">📉 Falling</span>',
                 "Stable": '<span class="badge-amber">➡ Stable</span>',
             }
             _p3_rows = ""
@@ -1454,7 +1447,6 @@ if st.session_state.selected_molecule:
                 _p3_rows += f"""
                 <tr>
                 <td>{_row['entity_name']}</td>
-                <td>{int(_row['total_qty']):,}</td>
                 <td>₹{_row['wtd_price']:,.0f}</td>
                 <td>{int(_row['month_count'])}</td>
                 <td>{_trend_badge.get(_row['trend'], '')}</td>
@@ -1463,7 +1455,7 @@ if st.session_state.selected_molecule:
             _html(f"""
             <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
             <thead><tr>
-            <th>Supplier</th><th>Total Volume ({uom})</th><th>Avg Price</th><th>Active Months</th><th>Trend</th>
+            <th>Supplier</th><th>Avg Price (₹/{uom})</th><th>Active Months</th><th>Price Trend</th>
             </tr></thead>
             <tbody>{_p3_rows}</tbody>
             </table>
@@ -1471,32 +1463,30 @@ if st.session_state.selected_molecule:
 
             # LLM Narrative
             _p3_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
-            _p3_cache = st.session_state.get("llm_supplier_vol_cache", {})
+            _p3_cache = st.session_state.get("llm_supplier_price_cache", {})
             if _p3_cache_key in _p3_cache:
                 _p3_llm_text = _p3_cache[_p3_cache_key]
             else:
-                _p3_total_vol = int(_p3_supplier_df["Sum_of_QTY"].sum())
                 _p3_top5_summary = [
                     {
                         "supplier": r["entity_name"],
-                        "total_qty": int(r["total_qty"]),
                         "avg_price": round(r["wtd_price"], 2),
                         "trend": r["trend"],
                     }
                     for _, r in _p3_totals.head(5).iterrows()
                 ]
                 _p3_prompt = (
-                    f"You are a pharmaceutical supply chain analyst. "
-                    f"Analyze the supplier volume trends for {selected_mol} over {month_context}. "
-                    f"Total market volume: {_p3_total_vol:,} {uom}. "
-                    f"Top suppliers by volume: {_p3_top5_summary}. "
-                    f"In 3-4 sentences, identify which suppliers are growing or declining in volume, "
-                    f"what this implies for supply chain risk, and give one strategic recommendation "
+                    f"You are a pharmaceutical procurement analyst. "
+                    f"Analyze the supplier average price trends for {selected_mol} over {month_context}. "
+                    f"Top suppliers by avg price: {_p3_top5_summary}. "
+                    f"In 3-4 sentences, identify which suppliers have the highest or lowest prices, "
+                    f"whether prices are rising or falling, "
+                    f"what this implies for Cipla's procurement cost, and give one strategic recommendation "
                     f"for Cipla's sourcing team."
                 )
                 _p3_llm_text = _llm_analysis(_p3_prompt)
                 _p3_cache[_p3_cache_key] = _p3_llm_text
-                st.session_state["llm_supplier_vol_cache"] = _p3_cache
+                st.session_state["llm_supplier_price_cache"] = _p3_cache
 
             if _p3_llm_text:
                 _html(f"""
@@ -1506,16 +1496,16 @@ if st.session_state.selected_molecule:
                 """)
             else:
                 # Fallback rule-based text
-                _p3_growing = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Growing"]
-                _p3_declining = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Declining"]
-                _p3_fallback = f"Supplier volume analysis for {selected_mol} over {month_context}. "
-                if _p3_growing:
-                    _p3_fallback += f"Growing suppliers: {', '.join(_p3_growing[:3])}. "
-                if _p3_declining:
-                    _p3_fallback += f"Declining suppliers: {', '.join(_p3_declining[:3])}. "
-                if not _p3_growing and not _p3_declining:
-                    _p3_fallback += "All suppliers show stable volume patterns. "
-                _p3_fallback += "Consider diversifying sourcing from growing suppliers to mitigate supply chain risk."
+                _p3_rising = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Rising"]
+                _p3_falling = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Falling"]
+                _p3_fallback = f"Supplier avg price analysis for {selected_mol} over {month_context}. "
+                if _p3_rising:
+                    _p3_fallback += f"Suppliers with rising prices: {', '.join(_p3_rising[:3])}. "
+                if _p3_falling:
+                    _p3_fallback += f"Suppliers with falling prices: {', '.join(_p3_falling[:3])}. "
+                if not _p3_rising and not _p3_falling:
+                    _p3_fallback += "All suppliers show stable price patterns. "
+                _p3_fallback += "Consider negotiating with higher-priced suppliers or increasing allocation to lower-priced ones."
                 _html(f"""
                 <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>{_p3_fallback}
