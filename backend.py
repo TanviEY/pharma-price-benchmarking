@@ -4,6 +4,7 @@ import json
 import os
 import glob
 import fnmatch
+import re
 import warnings
 import pandas as pd
 import numpy as np
@@ -12,6 +13,22 @@ from thefuzz import fuzz
 from typing import Dict, List, Optional, Tuple
 
 warnings.filterwarnings('ignore')
+
+# ── Gemini LLM ─────────────────────────────────────────────────────────────────
+
+try:
+    import google.generativeai as genai
+    _GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+    if _GEMINI_API_KEY:
+        genai.configure(api_key=_GEMINI_API_KEY)
+        _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+        _GEMINI_AVAILABLE = True
+    else:
+        _GEMINI_AVAILABLE = False
+        _gemini_model = None
+except Exception:
+    _GEMINI_AVAILABLE = False
+    _gemini_model = None
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +96,32 @@ def extract_grade_spec(item_text: str) -> str:
     return 'USP'
 
 
+def llm_extract_grade_spec(item_text: str) -> str:
+    """
+    Use Gemini to extract grade/spec from ITEM description.
+    Falls back to extract_grade_spec() if Gemini is unavailable.
+    Valid grades: USP, EP, IP, IH, BP
+    """
+    if not _GEMINI_AVAILABLE or _gemini_model is None or not isinstance(item_text, str):
+        return extract_grade_spec(item_text)
+    try:
+        prompt = (
+            "You are a pharmaceutical data parser. "
+            "Extract the pharmacopoeia grade from this API item description. "
+            "Return ONLY one of: USP, EP, IP, IH, BP. "
+            "If the description mentions 'inhouse' or 'IH' or 'no set pharmacopoeia', return IH. "
+            "If unclear, return USP.\n"
+            f"Item: {item_text}"
+        )
+        response = _gemini_model.generate_content(prompt)
+        grade = response.text.strip().upper()
+        if grade in ("USP", "EP", "IP", "IH", "BP"):
+            return grade
+        return extract_grade_spec(item_text)
+    except Exception:
+        return extract_grade_spec(item_text)
+
+
 def extract_yyyymm(date_col) -> str:
     """Extract yyyymm from date"""
     try:
@@ -91,6 +134,52 @@ def extract_yyyymm(date_col) -> str:
         return date_obj.strftime('%Y%m')
     except Exception:
         return None
+
+
+def llm_normalize_cipla_grade_spec(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize grade_spec column in Cipla GRN data using Gemini.
+    Known mapping: 'no set pharmacopoeia present (IH can be used -inhouse)' -> 'IH'
+    Falls back to a simple replace if Gemini is unavailable.
+    """
+    if 'grade_spec' not in df.columns:
+        return df
+
+    # Always apply the known hard-coded fix first (fast, no LLM needed)
+    df['grade_spec'] = df['grade_spec'].replace(
+        'no set pharmacopoeia present (IH can be used -inhouse)', 'IH'
+    )
+
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        return df
+
+    valid_grades = {"USP", "EP", "IP", "IH", "BP"}
+    non_standard_mask = ~df['grade_spec'].str.upper().isin(valid_grades)
+    non_standard_values = df.loc[non_standard_mask, 'grade_spec'].unique()
+
+    if len(non_standard_values) == 0:
+        return df
+
+    try:
+        values_list = "\n".join(f"- {v}" for v in non_standard_values)
+        prompt = (
+            "You are a pharmaceutical data normalizer. "
+            "Map each of the following non-standard grade_spec values to one of: USP, EP, IP, IH, BP. "
+            "Return a JSON object mapping each original value to its normalized grade. "
+            "Example: {\"some value\": \"IH\"}.\n"
+            f"Values to normalize:\n{values_list}"
+        )
+        response = _gemini_model.generate_content(prompt)
+        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+        if json_match:
+            mapping = json.loads(json_match.group())
+            for orig, normalized in mapping.items():
+                if normalized.upper() in valid_grades:
+                    df['grade_spec'] = df['grade_spec'].replace(orig, normalized.upper())
+    except Exception:
+        pass  # fallback: already applied hard-coded fix above
+
+    return df
 
 
 def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
@@ -127,7 +216,7 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
     outlier_df['outlier_reason_qty'] = outlier_df['QTY'] < min_qty
     outlier_df['outlier_reason_price'] = ~((outlier_df['unit_price'] >= price_lower) & (outlier_df['unit_price'] <= price_upper))
 
-    return df, outlier_df, {
+    filter_stats = {
         'original_count': original_count,
         'filtered_count': filtered_count,
         'removed_count': removed,
@@ -136,6 +225,58 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
         'price_lower': price_lower,
         'price_upper': price_upper,
     }
+    outlier_df = llm_explain_outliers(outlier_df, filter_stats)
+    return df, outlier_df, filter_stats
+
+
+def llm_explain_outliers(outlier_df: pd.DataFrame, filter_stats: dict) -> pd.DataFrame:
+    """
+    Use Gemini to add a human-readable 'outlier_reason_text' column to the outlier DataFrame.
+    Falls back to a simple rule-based reason if Gemini is unavailable.
+    """
+    if len(outlier_df) == 0:
+        return outlier_df
+
+    df = outlier_df.copy()
+
+    # Rule-based fallback reason (always computed)
+    min_qty = filter_stats.get('min_qty_threshold', 0)
+    price_lower = filter_stats.get('price_lower', 0)
+    price_upper = filter_stats.get('price_upper', float('inf'))
+
+    def _rule_reason(row):
+        reasons = []
+        if row.get('outlier_reason_qty', False):
+            reasons.append(f"Quantity {row.get('QTY', 0):.0f} is below minimum threshold {min_qty:.0f}")
+        if row.get('outlier_reason_price', False):
+            reasons.append(f"Unit price ₹{row.get('unit_price', 0):.2f} is outside range ₹{price_lower:.0f}–₹{price_upper:.0f}")
+        return " | ".join(reasons) if reasons else "Flagged as outlier"
+
+    df['outlier_reason_text'] = df.apply(_rule_reason, axis=1)
+
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        return df
+
+    try:
+        # Only send a sample to Gemini to avoid token limits
+        sample_df = df.head(5)
+        sample = sample_df[['outlier_reason_text']].to_dict(orient='records')
+        prompt = (
+            "You are a pharmaceutical procurement analyst. "
+            "Rewrite each of these technical outlier reasons into a clear, concise business explanation (max 15 words each). "
+            "Return a JSON array of strings in the same order.\n"
+            f"Reasons: {sample}"
+        )
+        response = _gemini_model.generate_content(prompt)
+        json_match = re.search(r'\[.*\]', response.text, re.DOTALL)
+        if json_match:
+            explanations = json.loads(json_match.group())
+            for i, explanation in enumerate(explanations[:len(sample_df)]):
+                df.at[sample_df.index[i], 'outlier_reason_text'] = explanation
+    except Exception:
+        pass  # fallback reason already set above
+
+    return df
 
 
 def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -176,6 +317,8 @@ def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
 def prepare_cipla_data(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare Cipla GRN data"""
     df = df.copy()
+
+    df = llm_normalize_cipla_grade_spec(df)
 
     # Extract date
     df['yyyymm'] = df['posting_date_in_the_document'].apply(extract_yyyymm)
@@ -430,6 +573,31 @@ def get_aliases(molecule: str, molecule_mapping: Dict) -> List[str]:
 # ── Pipeline ───────────────────────────────────────────────────────────────────
 
 
+def llm_pipeline_summary(result: dict) -> str:
+    """
+    Use Gemini to generate a human-readable summary of the pipeline result.
+    Returns empty string if Gemini is unavailable or result is not successful.
+    """
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        return ""
+    if result.get('status') != 'success':
+        return ""
+    try:
+        meta = result.get('metadata', {})
+        prompt = (
+            "You are a pharmaceutical procurement analyst. "
+            "Summarize this pipeline result in 2-3 sentences for a business audience. "
+            "Be concise and focus on data quality and record counts.\n"
+            f"Raw records: {meta.get('raw_record_count', 0)}\n"
+            f"Filter stats: {meta.get('filter_stats', {})}\n"
+            f"Cipla baseline avg price: ₹{meta.get('cipla_baseline', {}).get('avg_price', 0):,.2f}\n"
+        )
+        response = _gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception:
+        return ""
+
+
 def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
     """
     Universal pipeline for any molecule
@@ -506,7 +674,15 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
                 'cipla': cipla_agg,
                 'consolidated': consolidated,
                 'outlier': outlier_df,
-            }
+            },
+            'llm_summary': llm_pipeline_summary({
+                'status': 'success',
+                'metadata': {
+                    'raw_record_count': raw_record_count,
+                    'filter_stats': filter_stats,
+                    'cipla_baseline': cipla_baseline,
+                }
+            })
         }
 
     except Exception as e:
