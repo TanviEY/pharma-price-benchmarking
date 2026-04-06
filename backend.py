@@ -200,50 +200,23 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
     """
     Use Gemini to determine if item_value is a direct pharmaceutical form of molecule.
     Returns a dict: {"is_relevant": bool, "outlier_flag": bool, "outlier_reason": str}
-    Falls back to rule-based check if Gemini is unavailable.
+    The LLM prompt is the sole decision-maker; no hardcoded keyword rules are used.
+    If Gemini is unavailable or the response cannot be parsed, the item is treated as
+    relevant (safe pass-through) to avoid false-positive outlier flags.
     Results are cached per (molecule, item_value) pair to avoid redundant LLM calls.
     """
-    cache_key = (molecule.lower().strip(), str(item_value).strip())
+    _relevant = {"is_relevant": True, "outlier_flag": False, "outlier_reason": ""}
+
+    if not isinstance(item_value, str) or not item_value.strip():
+        return _relevant
+
+    cache_key = (molecule.lower().strip(), item_value.strip())
     if cache_key in _item_relevance_cache:
         return _item_relevance_cache[cache_key]
 
-    def _rule_based_check(mol: str, item: str) -> dict:
-        item_lower = item.lower()
-        mol_lower = mol.lower()
-        # Keyword check for impurity/reference standards
-        flag_keywords = [
-            "ep standard", "usp standard", "bp standard", "ip standard",
-            "impurity", "related compound", "reference standard", "marker",
-        ]
-        for kw in flag_keywords:
-            if kw in item_lower:
-                return {
-                    "is_relevant": False,
-                    "outlier_flag": True,
-                    "outlier_reason": f"Item appears to be a reference/impurity standard: keyword '{kw}' found",
-                }
-        # Check if item starts with a different drug name (word before molecule name)
-        mol_pos = item_lower.find(mol_lower)
-        if mol_pos > 0:
-            prefix = item_lower[:mol_pos].strip()
-            # If there's a meaningful word before the molecule name, flag it
-            prefix_words = prefix.split()
-            first_word = prefix_words[0] if prefix_words else ""
-            if first_word and len(first_word) > 3:
-                return {
-                    "is_relevant": False,
-                    "outlier_flag": True,
-                    "outlier_reason": (
-                        f"Item '{item}' starts with a different primary compound "
-                        f"'{first_word}'; '{mol}' appears only as a secondary reference"
-                    ),
-                }
-        return {"is_relevant": True, "outlier_flag": False, "outlier_reason": ""}
-
-    if not _GEMINI_AVAILABLE or _gemini_model is None or not isinstance(item_value, str):
-        result = _rule_based_check(molecule, item_value if isinstance(item_value, str) else "")
-        _item_relevance_cache[cache_key] = result
-        return result
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        _item_relevance_cache[cache_key] = _relevant
+        return _relevant
 
     try:
         prompt = (
@@ -273,9 +246,9 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
                 "outlier_reason": str(parsed.get("outlier_reason", "")),
             }
         else:
-            result = _rule_based_check(molecule, item_value)
+            result = _relevant
     except Exception:
-        result = _rule_based_check(molecule, item_value)
+        result = _relevant
 
     _item_relevance_cache[cache_key] = result
     return result
