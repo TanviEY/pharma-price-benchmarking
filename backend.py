@@ -192,6 +192,133 @@ def llm_extract_grade_spec(item_text: str) -> str:
         return extract_grade_spec(item_text)
 
 
+# Cache for LLM item relevance results keyed by (molecule, item_value)
+_item_relevance_cache: Dict[Tuple[str, str], dict] = {}
+
+
+def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
+    """
+    Use Gemini to determine if item_value is a direct pharmaceutical form of molecule.
+    Returns a dict: {"is_relevant": bool, "outlier_flag": bool, "outlier_reason": str}
+    Falls back to rule-based check if Gemini is unavailable.
+    Results are cached per (molecule, item_value) pair to avoid redundant LLM calls.
+    """
+    cache_key = (molecule.lower().strip(), str(item_value).strip())
+    if cache_key in _item_relevance_cache:
+        return _item_relevance_cache[cache_key]
+
+    def _rule_based_check(mol: str, item: str) -> dict:
+        item_lower = item.lower()
+        mol_lower = mol.lower()
+        # Keyword check for impurity/reference standards
+        flag_keywords = [
+            "ep standard", "usp standard", "bp standard", "ip standard",
+            "impurity", "related compound", "reference standard", "marker",
+        ]
+        for kw in flag_keywords:
+            if kw in item_lower:
+                return {
+                    "is_relevant": False,
+                    "outlier_flag": True,
+                    "outlier_reason": f"Item appears to be a reference/impurity standard: keyword '{kw}' found",
+                }
+        # Check if item starts with a different drug name (word before molecule name)
+        mol_pos = item_lower.find(mol_lower)
+        if mol_pos > 0:
+            prefix = item_lower[:mol_pos].strip()
+            # If there's a meaningful word before the molecule name, flag it
+            prefix_words = prefix.split()
+            first_word = prefix_words[0] if prefix_words else ""
+            if first_word and len(first_word) > 3:
+                return {
+                    "is_relevant": False,
+                    "outlier_flag": True,
+                    "outlier_reason": (
+                        f"Item '{item}' starts with a different primary compound "
+                        f"'{first_word}'; '{mol}' appears only as a secondary reference"
+                    ),
+                }
+        return {"is_relevant": True, "outlier_flag": False, "outlier_reason": ""}
+
+    if not _GEMINI_AVAILABLE or _gemini_model is None or not isinstance(item_value, str):
+        result = _rule_based_check(molecule, item_value if isinstance(item_value, str) else "")
+        _item_relevance_cache[cache_key] = result
+        return result
+
+    try:
+        prompt = (
+            f'You are a pharmaceutical expert analyzing import/export trade data.\n'
+            f'Molecule of interest: "{molecule}"\n'
+            f'Item description in the dataset: "{item_value}"\n\n'
+            f'Determine if this item directly represents "{molecule}" as an active pharmaceutical '
+            f'ingredient (API), its salt, hydrate, ester, polymorph, co-crystal, or finished dosage form.\n\n'
+            f'Flag as NOT RELEVANT (outlier) if ANY of these apply:\n'
+            f'1. It is a pharmacopoeial reference standard (EP, USP, BP, IP standard) that only mentions '
+            f'the molecule name — reference standards are analytical reagents, not the drug itself\n'
+            f'2. It is an impurity standard, related compound, or degradation product marker\n'
+            f'3. It is a different primary API/drug, and "{molecule}" appears only as a secondary reference '
+            f'(e.g. "Spiramycin Ep Azithromycin Dihydrate Usp" — Spiramycin is the primary drug)\n'
+            f'4. The molecule name is used as a calibrator, comparator substance, or test reference within a different product\n\n'
+            f'Respond ONLY in JSON (no markdown, no extra text):\n'
+            f'{{"is_relevant": <true|false>, "outlier_flag": <true|false>, '
+            f'"outlier_reason": "<one sentence, empty string if relevant>"}}'
+        )
+        response = _gemini_model.generate_content(prompt)
+        json_match = re.search(r'\{[^{}]*\}', response.text, re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            result = {
+                "is_relevant": bool(parsed.get("is_relevant", True)),
+                "outlier_flag": bool(parsed.get("outlier_flag", False)),
+                "outlier_reason": str(parsed.get("outlier_reason", "")),
+            }
+        else:
+            result = _rule_based_check(molecule, item_value)
+    except Exception:
+        result = _rule_based_check(molecule, item_value)
+
+    _item_relevance_cache[cache_key] = result
+    return result
+
+
+def llm_filter_item_relevance(
+    df: pd.DataFrame, molecule_name: str, item_col: str
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Filter rows where the item column does not directly represent the molecule.
+    Iterates over unique item values (batched) to avoid redundant LLM calls.
+    Returns: (relevant_df, item_outlier_df)
+    item_outlier_df has columns: outlier_reason_item, outlier_reason_text,
+    outlier_reason_qty, outlier_reason_price (for schema compatibility).
+    """
+    if df.empty or item_col not in df.columns:
+        return df, pd.DataFrame()
+
+    unique_items = df[item_col].dropna().unique()
+    item_relevance: Dict[str, dict] = {}
+    for item_val in unique_items:
+        item_relevance[item_val] = llm_check_item_relevance(molecule_name, str(item_val))
+
+    def _is_outlier(item_val):
+        if pd.isna(item_val):
+            return False
+        return item_relevance.get(item_val, {}).get("outlier_flag", False)
+
+    outlier_mask = df[item_col].apply(_is_outlier)
+    relevant_df = df[~outlier_mask].copy()
+    item_outlier_df = df[outlier_mask].copy()
+
+    if len(item_outlier_df) > 0:
+        item_outlier_df['outlier_reason_item'] = item_outlier_df[item_col].apply(
+            lambda v: item_relevance.get(v, {}).get("outlier_reason", "") if not pd.isna(v) else ""
+        )
+        item_outlier_df['outlier_reason_text'] = item_outlier_df['outlier_reason_item']
+        item_outlier_df['outlier_reason_qty'] = False
+        item_outlier_df['outlier_reason_price'] = False
+
+    return relevant_df, item_outlier_df
+
+
 def extract_yyyymm(date_col) -> str:
     """Extract yyyymm from date"""
     try:
@@ -316,6 +443,11 @@ def llm_explain_outliers(outlier_df: pd.DataFrame, filter_stats: dict) -> pd.Dat
 
     def _rule_reason(row):
         reasons = []
+        if row.get('outlier_reason_item'):
+            reasons.append(
+                f"Item '{row.get('ITEM', row.get('item', ''))}' is not a direct form of the molecule: "
+                f"{row.get('outlier_reason_item', '')}"
+            )
         if row.get('outlier_reason_qty', False):
             reasons.append(f"Quantity {row.get('QTY', 0):.0f} is below minimum threshold {min_qty:.0f}")
         if row.get('outlier_reason_price', False):
@@ -707,11 +839,27 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
         molecule_df = prepare_molecule_data(molecule_df)
         cipla_df = prepare_cipla_data(cipla_df)
 
+        # Step 3b: Filter item-irrelevant rows (LLM item relevance check)
+        item_col = next(
+            (c for c in ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT'] if c in molecule_df.columns),
+            None,
+        )
+        if item_col:
+            molecule_df, item_outlier_df = llm_filter_item_relevance(molecule_df, molecule_name, item_col)
+        else:
+            item_outlier_df = pd.DataFrame()
+
         # Step 4: Calculate baselines
         cipla_baseline = calculate_cipla_baseline(cipla_df)
 
         # Step 5: Filter outliers (returns tuple of (filtered_df, outlier_df, stats))
         molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
+
+        # Merge item-irrelevant outliers into the main outlier dataframe
+        if len(item_outlier_df) > 0:
+            outlier_df = pd.concat([item_outlier_df, outlier_df], ignore_index=True)
+
+        filter_stats['item_outlier_count'] = len(item_outlier_df)
 
         # Step 6: Aggregate
         supplier_agg = aggregate_supplier(molecule_df_filtered)
