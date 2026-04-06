@@ -95,6 +95,17 @@ def _gemini_narrate(step_description: str, step_result_summary: str) -> str:
         return ""
 
 
+def _llm_analysis(prompt: str) -> str:
+    """Call Gemini with a prompt and return the response text. Returns '' on failure."""
+    if not _GEMINI_AVAILABLE or _gemini_model is None:
+        return ""
+    try:
+        response = _gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception:
+        return ""
+
+
 AVATAR_COLORS = [
     "#3b82f6", "#16a34a", "#7c3aed", "#d97706",
     "#0891b2", "#dc2626", "#0d9488",
@@ -157,6 +168,12 @@ def _pagination_bar(total_items, page_size, current_page, state_key, prefix):
 
 _PAGE_SIZE = 10       # rows per page for all paginated tables / charts
 _MAX_PAGE_BTNS = 10   # max numbered page buttons to display at once
+
+# LLM analysis panel thresholds
+_PARITY_THRESHOLD = 0.02          # ±2% = price parity band (Panel 1)
+_BARGAIN_THRESHOLD_MULT = 0.95    # 5% below Cipla avg = bargain (Panel 2)
+_GROWTH_THRESHOLD = 5.0           # avg MoM % change > 5% → Growing (Panel 3)
+_DECLINE_THRESHOLD = -5.0         # avg MoM % change < -5% → Declining (Panel 3)
 
 
 # ─── page config ─────────────────────────────────────────────────────────────
@@ -546,6 +563,9 @@ for _k, _v in [
     ("filter_uoms", None),
     ("filter_grades", None),
     ("filters_applied", False),
+    ("llm_buyer_trend_cache", {}),
+    ("llm_bargain_cache", {}),
+    ("llm_supplier_vol_cache", {}),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -1078,6 +1098,432 @@ if st.session_state.selected_molecule:
                 key="excel_export",
             )
             st.markdown("</div>", unsafe_allow_html=True)
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # LLM PANEL 1 — Buyer Price Trend Analysis
+        # ─────────────────────────────────────────────────────────────────────────
+        _p1_cipla_df = filtered_df[filtered_df["source"] == "Cipla"]
+        _p1_buyer_df = filtered_df[filtered_df["source"] == "Buyer"]
+
+        _p1_empty = len(_p1_cipla_df) == 0 and len(_p1_buyer_df) == 0
+
+        _html("""
+        <div class="pi-page-body">
+        <div class="pi-card">
+        <div class="pi-section-header">BUYER PRICE TREND ANALYSIS</div>
+        <div class="pi-section-title">Cipla Avg vs EXIM Market Avg — Monthly Trend</div>
+        """ + f'<div class="pi-section-sub">Buyer perspective · {month_context} · {uom}</div>')
+
+        if _p1_empty:
+            _html('<div class="pi-info-banner">No data available for the selected filters.</div>')
+        else:
+            # Build monthly weighted avg per source
+            _p1_months = sorted(filtered_df["yyyymm"].unique())
+            _p1_cipla_monthly = {}
+            _p1_buyer_monthly = {}
+            for _m in _p1_months:
+                _cm = _p1_cipla_df[_p1_cipla_df["yyyymm"] == _m]
+                _p1_cipla_monthly[_m] = _safe_wtd_avg(_cm["Sum_of_TOTAL_VALUE"], _cm["Sum_of_QTY"])
+                _bm = _p1_buyer_df[_p1_buyer_df["yyyymm"] == _m]
+                _p1_buyer_monthly[_m] = _safe_wtd_avg(_bm["Sum_of_TOTAL_VALUE"], _bm["Sum_of_QTY"])
+
+            _p1_labels = [yyyymm_to_label(m) for m in _p1_months]
+            _p1_cipla_vals = [_p1_cipla_monthly[m] for m in _p1_months]
+            _p1_buyer_vals = [_p1_buyer_monthly[m] for m in _p1_months]
+
+            # Build Plotly figure
+            _p1_fig = go.Figure()
+            _p1_fig.add_trace(go.Scatter(
+                x=_p1_labels, y=_p1_cipla_vals,
+                mode="lines+markers", name="Cipla Avg Price",
+                line=dict(color="#3b82f6", dash="dash"), marker=dict(size=6),
+            ))
+            _p1_fig.add_trace(go.Scatter(
+                x=_p1_labels, y=_p1_buyer_vals,
+                mode="lines+markers", name="EXIM Market Avg (Buyer)",
+                line=dict(color="#0891b2"), marker=dict(size=6),
+            ))
+            _p1_fig.update_layout(
+                height=340,
+                paper_bgcolor="white", plot_bgcolor="white",
+                margin=dict(l=40, r=20, t=20, b=40),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                yaxis_title=f"Price (₹/{uom})",
+            )
+            st.plotly_chart(_p1_fig, use_container_width=True)
+
+            # %Higher / %Lower / %Parity analytics
+            _p1_compare_months = [
+                m for m in _p1_months
+                if _p1_cipla_monthly[m] > 0 and _p1_buyer_monthly[m] > 0
+            ]
+            _p1_total = len(_p1_compare_months)
+            if _p1_total > 0:
+                _p1_higher_count = sum(
+                    1 for m in _p1_compare_months
+                    if _p1_buyer_monthly[m] > _p1_cipla_monthly[m]
+                )
+                _p1_lower_count = sum(
+                    1 for m in _p1_compare_months
+                    if _p1_buyer_monthly[m] < _p1_cipla_monthly[m]
+                )
+                _p1_parity_count = sum(
+                    1 for m in _p1_compare_months
+                    if abs(_p1_buyer_monthly[m] - _p1_cipla_monthly[m]) / _p1_cipla_monthly[m] <= _PARITY_THRESHOLD
+                )
+                pct_higher = round(_p1_higher_count / _p1_total * 100, 1)
+                pct_lower = round(_p1_lower_count / _p1_total * 100, 1)
+                pct_parity = round(_p1_parity_count / _p1_total * 100, 1)
+            else:
+                pct_higher = pct_lower = pct_parity = 0.0
+
+            _html(f"""
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem;">
+            <span class="badge-red">📈 Higher {pct_higher}% of months</span>
+            <span class="badge-green">📉 Lower {pct_lower}% of months</span>
+            <span class="badge-amber">≈ Parity {pct_parity}% of months</span>
+            </div>
+            """)
+
+            # LLM Narrative
+            _p1_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
+            _p1_cache = st.session_state.get("llm_buyer_trend_cache", {})
+            if _p1_cache_key in _p1_cache:
+                _p1_llm_text = _p1_cache[_p1_cache_key]
+            else:
+                _p1_cipla_dict = {yyyymm_to_label(m): round(_p1_cipla_monthly[m], 2) for m in _p1_months}
+                _p1_buyer_dict = {yyyymm_to_label(m): round(_p1_buyer_monthly[m], 2) for m in _p1_months}
+                _p1_prompt = (
+                    f"You are a pharmaceutical procurement analyst. In 3-4 sentences, describe the price trend "
+                    f"from the buyer's perspective for {selected_mol}. "
+                    f"Monthly Cipla avg prices: {_p1_cipla_dict}. "
+                    f"Monthly EXIM buyer avg prices: {_p1_buyer_dict}. "
+                    f"In {pct_higher}% of months, buyers paid more than Cipla; in {pct_lower}% they paid less; "
+                    f"in {pct_parity}% prices were at parity (within 2%). "
+                    f"Period: {month_context}. "
+                    f"Highlight whether buyers are generally paying more or less than Cipla's internal price, "
+                    f"note any notable months or turning points, and give one actionable recommendation."
+                )
+                _p1_llm_text = _llm_analysis(_p1_prompt)
+                _p1_cache[_p1_cache_key] = _p1_llm_text
+                st.session_state["llm_buyer_trend_cache"] = _p1_cache
+
+            if _p1_llm_text:
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">🤖 AI Analysis · </span>{_p1_llm_text}
+                </div>
+                """)
+            else:
+                # Fallback rule-based text
+                if pct_lower >= pct_higher:
+                    _p1_fallback = (
+                        f"Buyers are generally purchasing {selected_mol} below Cipla's internal benchmark price "
+                        f"({pct_lower}% of months), suggesting a competitive external market."
+                    )
+                else:
+                    _p1_fallback = (
+                        f"Buyers are paying above Cipla's internal benchmark in {pct_higher}% of the selected months, "
+                        f"indicating Cipla has a cost advantage in external procurement."
+                    )
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">📊 Analysis · </span>{_p1_fallback}
+                </div>
+                """)
+
+        _html("</div></div>")  # pi-card, pi-page-body
+        _html('<div style="height:1rem;"></div>')
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # LLM PANEL 2 — Bargain Buyers
+        # ─────────────────────────────────────────────────────────────────────────
+        _p2_cipla_df = filtered_df[filtered_df["source"] == "Cipla"]
+        _p2_buyer_df = filtered_df[filtered_df["source"] == "Buyer"]
+        _p2_cipla_price = _safe_wtd_avg(_p2_cipla_df["Sum_of_TOTAL_VALUE"], _p2_cipla_df["Sum_of_QTY"])
+        _p2_bargain_threshold = _p2_cipla_price * _BARGAIN_THRESHOLD_MULT
+
+        _html(f"""
+        <div class="pi-page-body">
+        <div class="pi-card">
+        <div class="pi-section-header">BARGAIN BUYER ANALYSIS</div>
+        <div class="pi-section-title">Buyers Purchasing at Below-Benchmark Prices</div>
+        <div class="pi-section-sub">Identified buyers · {month_context} · threshold = Cipla avg × 0.95</div>
+        """)
+
+        if len(_p2_buyer_df) == 0:
+            _html('<div class="pi-info-banner">No buyer data available for the selected filters.</div>')
+        else:
+            # Group by entity_name
+            _p2_grp = (
+                _p2_buyer_df.groupby("entity_name")
+                .apply(lambda g: pd.Series({
+                    "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                    "total_qty": g["Sum_of_QTY"].sum(),
+                    "total_value": g["Sum_of_TOTAL_VALUE"].sum(),
+                }))
+                .reset_index()
+            )
+            _p2_grp = _p2_grp[_p2_grp["wtd_price"] > 0]
+            _p2_bargain = _p2_grp[_p2_grp["wtd_price"] <= _p2_bargain_threshold].sort_values("wtd_price")
+            _p2_total_buyers = len(_p2_grp)
+            _p2_bargain_count = len(_p2_bargain)
+
+            # Summary line
+            _html(f"""
+            <div style="font-size:0.85rem;color:#334155;margin-bottom:0.75rem;">
+            <strong>{_p2_bargain_count}</strong> out of <strong>{_p2_total_buyers}</strong> buyers are purchasing
+            below Cipla's internal price benchmark
+            (₹{_p2_cipla_price:,.0f}/{uom} × 0.95 = ₹{_p2_bargain_threshold:,.0f}/{uom}).
+            </div>
+            """)
+
+            if _p2_bargain_count == 0:
+                _html('<div class="pi-info-banner">No buyers are purchasing below the bargain threshold in this period.</div>')
+            else:
+                # Build HTML table
+                _p2_rows = ""
+                for _, _row in _p2_bargain.iterrows():
+                    _vs_cipla = ((_row["wtd_price"] - _p2_cipla_price) / _p2_cipla_price * 100) if _p2_cipla_price > 0 else 0
+                    _p2_rows += f"""
+                    <tr>
+                    <td>{_row['entity_name']}</td>
+                    <td>₹{_row['wtd_price']:,.0f}</td>
+                    <td>{int(_row['total_qty']):,}</td>
+                    <td style="color:#16a34a;">{_vs_cipla:+.1f}%</td>
+                    <td><span class="badge-green">✅ Bargain</span></td>
+                    </tr>
+                    """
+                _html(f"""
+                <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
+                <thead><tr>
+                <th>Buyer</th><th>Avg Price</th><th>Volume ({uom})</th><th>% vs Cipla</th><th>Position</th>
+                </tr></thead>
+                <tbody>{_p2_rows}</tbody>
+                </table>
+                """)
+
+            # LLM Narrative
+            _p2_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
+            _p2_cache = st.session_state.get("llm_bargain_cache", {})
+            if _p2_cache_key in _p2_cache:
+                _p2_llm_text = _p2_cache[_p2_cache_key]
+            else:
+                if _p2_bargain_count > 0:
+                    _p2_cheapest_row = _p2_bargain.iloc[0]
+                    _p2_cheapest_buyer = _p2_cheapest_row["entity_name"]
+                    _p2_cheapest_price = _p2_cheapest_row["wtd_price"]
+                    _p2_bargain_list = [
+                        {"buyer": r["entity_name"], "price": round(r["wtd_price"], 2), "qty": int(r["total_qty"])}
+                        for _, r in _p2_bargain.iterrows()
+                    ]
+                    _p2_prompt = (
+                        f"You are a pharmaceutical procurement analyst. "
+                        f"{_p2_bargain_count} buyers are purchasing {selected_mol} below Cipla's internal benchmark "
+                        f"of ₹{_p2_cipla_price:.0f}/{uom} in {month_context}. "
+                        f"The cheapest buyer is {_p2_cheapest_buyer} at ₹{_p2_cheapest_price:.0f}/{uom}. "
+                        f"Bargain buyers: {_p2_bargain_list}. "
+                        f"In 3-4 sentences, explain what this means for Cipla's procurement position and "
+                        f"give one concrete negotiation insight."
+                    )
+                    _p2_llm_text = _llm_analysis(_p2_prompt)
+                else:
+                    _p2_llm_text = ""
+                _p2_cache[_p2_cache_key] = _p2_llm_text
+                st.session_state["llm_bargain_cache"] = _p2_cache
+
+            if _p2_llm_text:
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">🤖 AI Analysis · </span>{_p2_llm_text}
+                </div>
+                """)
+            elif _p2_bargain_count == 0 and len(_p2_buyer_df) > 0:
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">📊 Analysis · </span>
+                No buyers are purchasing {selected_mol} below the 5% discount threshold relative to Cipla's benchmark
+                price of ₹{_p2_cipla_price:,.0f}/{uom} in {month_context}.
+                This indicates Cipla's procurement price is competitive in the current market.
+                </div>
+                """)
+
+        _html("</div></div>")  # pi-card, pi-page-body
+        _html('<div style="height:1rem;"></div>')
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # LLM PANEL 3 — Supplier Volume Analytics
+        # ─────────────────────────────────────────────────────────────────────────
+        _p3_supplier_df = filtered_df[filtered_df["source"] == "Supplier"]
+
+        _html(f"""
+        <div class="pi-page-body">
+        <div class="pi-card">
+        <div class="pi-section-header">SUPPLIER VOLUME ANALYTICS</div>
+        <div class="pi-section-title">Supplier Volume Trends — Growth &amp; Decline</div>
+        <div class="pi-section-sub">Supplier perspective · {month_context} · {uom}</div>
+        """)
+
+        if len(_p3_supplier_df) == 0:
+            _html('<div class="pi-info-banner">No supplier data available for the selected filters.</div>')
+        else:
+            # Monthly volume by supplier
+            _p3_months = sorted(_p3_supplier_df["yyyymm"].unique())
+            _p3_labels = [yyyymm_to_label(m) for m in _p3_months]
+
+            # Supplier totals
+            _p3_totals = (
+                _p3_supplier_df.groupby("entity_name")
+                .apply(lambda g: pd.Series({
+                    "total_qty": g["Sum_of_QTY"].sum(),
+                    "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                    "month_count": g["yyyymm"].nunique(),
+                }))
+                .reset_index()
+                .sort_values("total_qty", ascending=False)
+            )
+
+            # Top 5 suppliers for stacked bar
+            _p3_top5 = _p3_totals.head(5)["entity_name"].tolist()
+
+            # Compute MoM trend per supplier
+            def _p3_supplier_trend(sup_name):
+                _sd = _p3_supplier_df[_p3_supplier_df["entity_name"] == sup_name]
+                _sm = _sd.groupby("yyyymm")["Sum_of_QTY"].sum().sort_index()
+                if len(_sm) < 2:
+                    return "Stable"
+                _pct_changes = _sm.pct_change().dropna() * 100
+                _avg_mom = _pct_changes.mean()
+                if _avg_mom > _GROWTH_THRESHOLD:
+                    return "Growing"
+                elif _avg_mom < _DECLINE_THRESHOLD:
+                    return "Declining"
+                return "Stable"
+
+            _p3_totals["trend"] = _p3_totals["entity_name"].apply(_p3_supplier_trend)
+
+            # Stacked bar chart
+            _p3_fig = go.Figure()
+            for _idx, _sup in enumerate(_p3_top5):
+                _sup_monthly = []
+                for _m in _p3_months:
+                    _sdf = _p3_supplier_df[
+                        (_p3_supplier_df["entity_name"] == _sup) & (_p3_supplier_df["yyyymm"] == _m)
+                    ]
+                    _sup_monthly.append(_sdf["Sum_of_QTY"].sum())
+                _p3_fig.add_trace(go.Bar(
+                    name=_sup, x=_p3_labels, y=_sup_monthly,
+                    marker_color=_avatar_color(_idx),
+                ))
+
+            # "Others" bar
+            _p3_others_monthly = []
+            for _m in _p3_months:
+                _all_m = _p3_supplier_df[_p3_supplier_df["yyyymm"] == _m]["Sum_of_QTY"].sum()
+                _top5_m = sum(
+                    _p3_supplier_df[
+                        (_p3_supplier_df["entity_name"] == _sup) & (_p3_supplier_df["yyyymm"] == _m)
+                    ]["Sum_of_QTY"].sum()
+                    for _sup in _p3_top5
+                )
+                _p3_others_monthly.append(max(0, _all_m - _top5_m))
+            if any(v > 0 for v in _p3_others_monthly):
+                _p3_fig.add_trace(go.Bar(
+                    name="Others", x=_p3_labels, y=_p3_others_monthly,
+                    marker_color="#94a3b8",
+                ))
+
+            _p3_fig.update_layout(
+                barmode="stack", height=300,
+                paper_bgcolor="white", plot_bgcolor="white",
+                margin=dict(l=40, r=20, t=20, b=40),
+                yaxis_title=f"Volume ({uom})",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(_p3_fig, use_container_width=True)
+
+            # Supplier summary table (top 10)
+            _p3_display = _p3_totals.head(10)
+            _trend_badge = {
+                "Growing": '<span class="badge-green">📈 Growing</span>',
+                "Declining": '<span class="badge-red">📉 Declining</span>',
+                "Stable": '<span class="badge-amber">➡ Stable</span>',
+            }
+            _p3_rows = ""
+            for _, _row in _p3_display.iterrows():
+                _p3_rows += f"""
+                <tr>
+                <td>{_row['entity_name']}</td>
+                <td>{int(_row['total_qty']):,}</td>
+                <td>₹{_row['wtd_price']:,.0f}</td>
+                <td>{int(_row['month_count'])}</td>
+                <td>{_trend_badge.get(_row['trend'], '')}</td>
+                </tr>
+                """
+            _html(f"""
+            <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
+            <thead><tr>
+            <th>Supplier</th><th>Total Volume ({uom})</th><th>Avg Price</th><th>Active Months</th><th>Trend</th>
+            </tr></thead>
+            <tbody>{_p3_rows}</tbody>
+            </table>
+            """)
+
+            # LLM Narrative
+            _p3_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
+            _p3_cache = st.session_state.get("llm_supplier_vol_cache", {})
+            if _p3_cache_key in _p3_cache:
+                _p3_llm_text = _p3_cache[_p3_cache_key]
+            else:
+                _p3_total_vol = int(_p3_supplier_df["Sum_of_QTY"].sum())
+                _p3_top5_summary = [
+                    {
+                        "supplier": r["entity_name"],
+                        "total_qty": int(r["total_qty"]),
+                        "avg_price": round(r["wtd_price"], 2),
+                        "trend": r["trend"],
+                    }
+                    for _, r in _p3_totals.head(5).iterrows()
+                ]
+                _p3_prompt = (
+                    f"You are a pharmaceutical supply chain analyst. "
+                    f"Analyze the supplier volume trends for {selected_mol} over {month_context}. "
+                    f"Total market volume: {_p3_total_vol:,} {uom}. "
+                    f"Top suppliers by volume: {_p3_top5_summary}. "
+                    f"In 3-4 sentences, identify which suppliers are growing or declining in volume, "
+                    f"what this implies for supply chain risk, and give one strategic recommendation "
+                    f"for Cipla's sourcing team."
+                )
+                _p3_llm_text = _llm_analysis(_p3_prompt)
+                _p3_cache[_p3_cache_key] = _p3_llm_text
+                st.session_state["llm_supplier_vol_cache"] = _p3_cache
+
+            if _p3_llm_text:
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">🤖 AI Analysis · </span>{_p3_llm_text}
+                </div>
+                """)
+            else:
+                # Fallback rule-based text
+                _p3_growing = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Growing"]
+                _p3_declining = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Declining"]
+                _p3_fallback = f"Supplier volume analysis for {selected_mol} over {month_context}. "
+                if _p3_growing:
+                    _p3_fallback += f"Growing suppliers: {', '.join(_p3_growing[:3])}. "
+                if _p3_declining:
+                    _p3_fallback += f"Declining suppliers: {', '.join(_p3_declining[:3])}. "
+                if not _p3_growing and not _p3_declining:
+                    _p3_fallback += "All suppliers show stable volume patterns. "
+                _p3_fallback += "Consider diversifying sourcing from growing suppliers to mitigate supply chain risk."
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">📊 Analysis · </span>{_p3_fallback}
+                </div>
+                """)
+
+        _html("</div></div>")  # pi-card, pi-page-body
+        _html('<div style="height:1rem;"></div>')
 
         # ─────────────────────────────────────────────────────────────────────────
         # SECTION 1 — 5 KPI Cards with Sparklines
