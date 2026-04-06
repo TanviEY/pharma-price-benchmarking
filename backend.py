@@ -475,7 +475,7 @@ def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
             item_col = col
             break
     if item_col:
-        df['GRADE_SPEC'] = df[item_col].apply(extract_grade_spec)
+        df['GRADE_SPEC'] = df[item_col].apply(llm_extract_grade_spec)
     else:
         df['GRADE_SPEC'] = 'USP'
 
