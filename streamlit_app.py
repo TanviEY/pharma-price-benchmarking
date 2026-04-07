@@ -172,7 +172,6 @@ _MAX_PAGE_BTNS = 10   # max numbered page buttons to display at once
 
 # LLM analysis panel thresholds
 _PARITY_THRESHOLD = 0.02          # ±2% = price parity band (Panel 1)
-_BARGAIN_THRESHOLD_MULT = 0.95    # 5% below Cipla avg = bargain (Panel 2)
 _GROWTH_THRESHOLD = 5.0           # avg MoM % change > 5% → Growing (Panel 3)
 _DECLINE_THRESHOLD = -5.0         # avg MoM % change < -5% → Declining (Panel 3)
 
@@ -559,6 +558,7 @@ for _k, _v in [
     ("comp_table_page", 1),
     ("cipla_table_page", 1),
     ("exim_table_page", 1),
+    ("bargain_page", 1),
     ("cipla_from_month", None),
     ("cipla_to_month", None),
     ("filter_from_month", None),
@@ -1043,7 +1043,7 @@ if st.session_state.selected_molecule:
         st.session_state["filter_grades"] = _grades_sel if _grades_sel else _all_grades
         st.session_state["filters_applied"] = True
         # Reset paginations when filter changes
-        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page"]:
+        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page", "bargain_page"]:
             st.session_state[_pk] = 1
         st.rerun()
 
@@ -1421,14 +1421,14 @@ if st.session_state.selected_molecule:
         _p2_cipla_df = filtered_df[filtered_df["source"] == "Cipla"]
         _p2_buyer_df = filtered_df[filtered_df["source"] == "Buyer"]
         _p2_cipla_price = _safe_wtd_avg(_p2_cipla_df["Sum_of_TOTAL_VALUE"], _p2_cipla_df["Sum_of_QTY"])
-        _p2_bargain_threshold = _p2_cipla_price * _BARGAIN_THRESHOLD_MULT
+        _p2_bargain_threshold = _p2_cipla_price
 
         _html(f"""
         <div class="pi-page-body">
         <div class="pi-card">
         <div class="pi-section-header">BARGAIN BUYER ANALYSIS</div>
         <div class="pi-section-title">Buyers Purchasing at Below-Benchmark Prices</div>
-        <div class="pi-section-sub">Identified buyers · {month_context} · threshold = Cipla avg × 0.95</div>
+        <div class="pi-section-sub">Identified buyers · {month_context} · threshold = Cipla avg price</div>
         <div class="pi-card-content">
         """)
 
@@ -1455,16 +1455,23 @@ if st.session_state.selected_molecule:
             <div style="font-size:0.85rem;color:#334155;margin-bottom:0.75rem;">
             <strong>{_p2_bargain_count}</strong> out of <strong>{_p2_total_buyers}</strong> buyers are purchasing
             below Cipla's internal price benchmark
-            (₹{_p2_cipla_price:,.0f}/{uom} × 0.95 = ₹{_p2_bargain_threshold:,.0f}/{uom}).
+            (threshold: ₹{_p2_bargain_threshold:,.0f}/{uom}).
             </div>
             """)
 
             if _p2_bargain_count == 0:
                 _html('<div class="pi-info-banner">No buyers are purchasing below the bargain threshold in this period.</div>')
             else:
+                # Pagination for bargain table
+                _p2_page = st.session_state.get("bargain_page", 1)
+                _p2_page_size = _PAGE_SIZE  # 10
+                _p2_start = (_p2_page - 1) * _p2_page_size
+                _p2_end = _p2_start + _p2_page_size
+                _p2_bargain_page = _p2_bargain.iloc[_p2_start:_p2_end]
+
                 # Build HTML table
                 _p2_rows = ""
-                for _, _row in _p2_bargain.iterrows():
+                for _, _row in _p2_bargain_page.iterrows():
                     _vs_cipla = ((_row["wtd_price"] - _p2_cipla_price) / _p2_cipla_price * 100) if _p2_cipla_price > 0 else 0
                     _p2_rows += f"""
                     <tr>
@@ -1483,6 +1490,8 @@ if st.session_state.selected_molecule:
                 <tbody>{_p2_rows}</tbody>
                 </table>
                 """)
+                # Render pagination buttons inline (inside the panel)
+                _pagination_bar(len(_p2_bargain), _p2_page_size, _p2_page, "bargain_page", "bargain")
 
             # LLM Narrative
             _p2_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
@@ -1543,7 +1552,7 @@ if st.session_state.selected_molecule:
         <div class="pi-section-header">SUPPLIER AVG PRICE ANALYTICS</div>
         <div class="pi-section-title">Supplier Avg Price Trends — Monthly Comparison</div>
         <div class="pi-section-sub">Supplier perspective · {month_context} · ₹/{uom}</div>
-        <div class="pi-card-content">
+        <div class="pi-card-content" style="margin-top:1rem;">
         """)
 
         if len(_p3_supplier_df) == 0:
@@ -1613,6 +1622,7 @@ if st.session_state.selected_molecule:
                 yaxis_title=f"Avg Price (₹/{uom})",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
+            st.markdown('<div style="height:0.75rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p3_fig, use_container_width=True)
 
             # Supplier summary table (top 10)
