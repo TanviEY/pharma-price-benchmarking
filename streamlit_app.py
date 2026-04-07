@@ -2197,10 +2197,6 @@ if st.session_state.selected_molecule:
         # Always include Cipla entities
         entities_bubble = sorted(top25_ents_b | cipla_bubble_ents)
 
-        # Scale bubble sizes: sqrt(qty / max_qty) * 60 + 10
-        max_qty_b = bubble_df["sum_qty"].max() if bubble_df["sum_qty"].max() > 0 else 1
-        bubble_df["bubble_size"] = ((bubble_df["sum_qty"] / max_qty_b) ** 0.5) * 60 + 10
-
         # Color map
         entity_colors_b = {}
         b_color_idx = 0
@@ -2245,31 +2241,75 @@ if st.session_state.selected_molecule:
                     annotation_font_size=9, annotation_font_color="#64748b",
                 )
 
+        # Build Cipla monthly lookup for comparison in hover tooltips
+        cipla_monthly_lookup = {}
+        for _, row in bubble_df[bubble_df["source"] == "Cipla"].iterrows():
+            cipla_monthly_lookup[row["yyyymm"]] = {
+                "wtd_price": row["wtd_price"],
+                "sum_qty": row["sum_qty"],
+            }
+
+        cipla_mol_label = f"cipla-{selected_mol.lower()}"
+
         for ent in entities_bubble:
             ent_df = bubble_df[bubble_df["entity_name"] == ent].sort_values("yyyymm")
             color = entity_colors_b.get(ent, "#64748b")
             # Cipla traces use "cipla-<molecule>" as the display name
-            trace_name = f"cipla-{selected_mol.lower()}" if ent in cipla_bubble_ents else ent
+            is_cipla = ent in cipla_bubble_ents
+            trace_name = cipla_mol_label if is_cipla else ent
+
+            if is_cipla:
+                custom = list(zip(
+                    ent_df["sum_qty"],
+                    ent_df["yyyymm"],
+                ))
+                htemplate = (
+                    f"<b>{trace_name}</b> <i>(Benchmark)</i><br>"
+                    "Month: %{x}<br>"
+                    f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
+                    f"Volume: %{{customdata[0]:,.0f}} {uom}<extra></extra>"
+                )
+            else:
+                rows_custom = []
+                for _, r in ent_df.iterrows():
+                    c_info = cipla_monthly_lookup.get(r["yyyymm"], {})
+                    c_price = c_info.get("wtd_price", 0)
+                    c_qty = c_info.get("sum_qty", 0)
+                    p_diff = r["wtd_price"] - c_price if c_price else float("nan")
+                    p_pct = (p_diff / c_price * 100) if c_price else float("nan")
+                    rows_custom.append((
+                        r["sum_qty"],
+                        r["yyyymm"],
+                        c_price,
+                        c_qty,
+                        p_diff,
+                        p_pct,
+                    ))
+                custom = rows_custom
+                htemplate = (
+                    f"<b>{trace_name}</b><br>"
+                    "Month: %{x}<br>"
+                    f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
+                    f"Volume: %{{customdata[0]:,.0f}} {uom}<br>"
+                    "─────────────────────────────<br>"
+                    f"<b>vs {cipla_mol_label}</b><br>"
+                    f"  Price:  ₹%{{y:,.0f}}  vs  ₹%{{customdata[2]:,.0f}}  →  %{{customdata[4]:+,.0f}} (%{{customdata[5]:+.1f}}%)<br>"
+                    f"  Volume: %{{customdata[0]:,.0f}}  vs  %{{customdata[3]:,.0f}} {uom}<extra></extra>"
+                )
+
             fig_bubble.add_trace(go.Scatter(
                 x=ent_df["month_label"],
                 y=ent_df["wtd_price"],
                 mode="markers",
                 name=trace_name,
                 marker=dict(
-                    size=ent_df["bubble_size"].tolist(),
-                    sizemode="diameter",
-                    sizeref=1,
+                    size=10,
                     color=color,
                     opacity=0.75,
                     line=dict(width=2, color="white"),
                 ),
-                customdata=list(zip(ent_df["sum_qty"], ent_df["yyyymm"])),
-                hovertemplate=(
-                    f"<b>{trace_name}</b><br>"
-                    "Month: %{x}<br>"
-                    f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
-                    f"Volume: %{{customdata[0]:,.0f}} {uom}<extra></extra>"
-                ),
+                customdata=custom,
+                hovertemplate=htemplate,
             ))
 
         # Cipla reference line
@@ -2305,8 +2345,8 @@ if st.session_state.selected_molecule:
         st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
         _html(f"""
         <div class="pi-card" style="margin-bottom:0.5rem;">
-          <div class="pi-section-title">Price over Time · Bubble Analysis</div>
-          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Bubble size = Volume · Colour = Entity</div>
+          <div class="pi-section-title">Price over Time · Dot Chart</div>
+          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Dot = Entity · Hover for Cipla comparison</div>
         </div>
         """)
         st.markdown("</div>", unsafe_allow_html=True)
