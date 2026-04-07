@@ -569,6 +569,7 @@ for _k, _v in [
     ("llm_buyer_trend_cache", {}),
     ("llm_bargain_cache", {}),
     ("llm_supplier_vol_cache", {}),
+    ("p3_table_page", 1),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -1043,7 +1044,7 @@ if st.session_state.selected_molecule:
         st.session_state["filter_grades"] = _grades_sel if _grades_sel else _all_grades
         st.session_state["filters_applied"] = True
         # Reset paginations when filter changes
-        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page", "bargain_page"]:
+        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page", "bargain_page", "p3_table_page"]:
             st.session_state[_pk] = 1
         st.rerun()
 
@@ -1325,17 +1326,21 @@ if st.session_state.selected_molecule:
             _p1_fig.update_layout(
                 height=340,
                 paper_bgcolor="white", plot_bgcolor="white",
-                margin=dict(l=40, r=20, t=20, b=40),
+                margin=dict(l=40, r=20, t=20, b=60),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 yaxis=dict(
-                    title=f"Price (₹/{uom})",
+                    title=f"Avg Price (₹/{uom})",
                     tickformat=",.0f",
-                    nticks=10,
+                    nticks=15,
+                    tickmode="auto",
                     showgrid=True,
                     gridcolor="#e4e9f2",
                     gridwidth=1,
                     griddash="dot",
                     autorange=True,
+                ),
+                xaxis=dict(
+                    tickangle=-30,
                 ),
             )
             st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
@@ -1647,35 +1652,42 @@ if st.session_state.selected_molecule:
 
             _p3_totals["trend"] = _p3_totals["entity_name"].apply(_p3_supplier_trend)
 
-            # Line chart — monthly avg price per top-5 supplier
+            # Bar chart — monthly total volume across all suppliers
+            _p3_monthly_vol = _p3_supplier_df.groupby("yyyymm")["Sum_of_QTY"].sum()
+            _p3_vol_by_month = [_p3_monthly_vol.get(_m, 0) for _m in _p3_months]
             _p3_fig = go.Figure()
-            for _idx, _sup in enumerate(_p3_top5):
-                _sup_monthly_price = []
-                for _m in _p3_months:
-                    _sdf = _p3_supplier_df[
-                        (_p3_supplier_df["entity_name"] == _sup) & (_p3_supplier_df["yyyymm"] == _m)
-                    ]
-                    _sup_monthly_price.append(_safe_wtd_avg(_sdf["Sum_of_TOTAL_VALUE"], _sdf["Sum_of_QTY"]))
-                _p3_fig.add_trace(go.Scatter(
-                    name=_sup, x=_p3_labels, y=_sup_monthly_price,
-                    mode="lines+markers",
-                    line=dict(color=_avatar_color(_idx), width=2),
-                    marker=dict(size=6),
-                    connectgaps=True,
-                ))
-
+            _p3_fig.add_trace(go.Bar(
+                x=_p3_labels,
+                y=_p3_vol_by_month,
+                marker_color="#0891b2",
+                hovertemplate="<b>%{x}</b><br>Volume: %{y:,.0f}<extra></extra>",
+                name="Total Volume",
+            ))
             _p3_fig.update_layout(
                 height=300,
                 paper_bgcolor="white", plot_bgcolor="white",
-                margin=dict(l=40, r=20, t=20, b=40),
-                yaxis_title=f"Avg Price (₹/{uom})",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(l=40, r=20, t=20, b=60),
+                showlegend=False,
+                xaxis=dict(title="Month", tickangle=-30),
+                yaxis=dict(
+                    title=f"Volume ({uom})",
+                    tickformat=",.0f",
+                    nticks=10,
+                    showgrid=True,
+                    gridcolor="#e4e9f2",
+                    griddash="dot",
+                    autorange=True,
+                ),
             )
             st.markdown('<div style="height:0.75rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p3_fig, use_container_width=True)
 
-            # Supplier summary table (top 10)
-            _p3_display = _p3_totals.head(10)
+            # Supplier summary table (paginated)
+            _p3_page = st.session_state.get("p3_table_page", 1)
+            _p3_page_size = _PAGE_SIZE  # 10
+            _p3_start = (_p3_page - 1) * _p3_page_size
+            _p3_end = _p3_start + _p3_page_size
+            _p3_display = _p3_totals.iloc[_p3_start:_p3_end]
             _trend_badge = {
                 # Procurement perspective: rising prices = bad (red), falling prices = good (green)
                 "Rising": '<span class="badge-red">📈 Rising</span>',
@@ -1700,6 +1712,7 @@ if st.session_state.selected_molecule:
             <tbody>{_p3_rows}</tbody>
             </table>
             """)
+            _pagination_bar(len(_p3_totals), _p3_page_size, _p3_page, "p3_table_page", "p3_table")
 
             # LLM Narrative
             _p3_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
