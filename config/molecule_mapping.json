@@ -5,6 +5,7 @@
       "export_file_patterns": ["Azithromycin Export_*.xlsx", "azithromycin Export_*.xlsx"],
       "aliases": ["azithromycoon", "azithro", "azi", "zithromax", "azith"],
       "cipla_api_filter": "AZITHROMYCIN DIHYDRATE",
+      "import_duty_pct": 12,
       "status": "active",
       "description": "Azithromycin API - Macrolide antibiotic"
     },
@@ -13,6 +14,7 @@
       "export_file_patterns": ["Lamivudine Export_*.xlsx", "lamivudine Export_*.xlsx"],
       "aliases": ["lami", "3tc", "epivir", "lamivudin"],
       "cipla_api_filter": "LAMIVUDINE",
+      "import_duty_pct": 12,
       "status": "active",
       "description": "Lamivudine API - Antiretroviral nucleoside reverse transcriptase inhibitor"
     },
@@ -21,6 +23,7 @@
       "export_file_patterns": ["TENOFOVIR DISOPROXIL FUMARATE_Export_*.xlsx", "tenofovir disoproxil fumarate_Export_*.xlsx", "Tenofovir Disoproxil Fumarate_Export_*.xlsx"],
       "aliases": ["tenofovir", "tdf", "viread", "tenofovir disoproxil", "tenofovir df"],
       "cipla_api_filter": "TENOFOVIR DISOPROXIL FUMARATE",
+      "import_duty_pct": 12,
       "status": "active",
       "description": "Tenofovir Disoproxil Fumarate API - Antiretroviral nucleotide reverse transcriptase inhibitor"
     }
