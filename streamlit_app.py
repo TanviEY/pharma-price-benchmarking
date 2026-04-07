@@ -174,6 +174,8 @@ _MAX_PAGE_BTNS = 10   # max numbered page buttons to display at once
 _PARITY_THRESHOLD = 0.02          # ±2% = price parity band (Panel 1)
 _GROWTH_THRESHOLD = 5.0           # avg MoM % change > 5% → Growing (Panel 3)
 _DECLINE_THRESHOLD = -5.0         # avg MoM % change < -5% → Declining (Panel 3)
+_VOL_INCREASE_THRESHOLD = 20.0    # % MoM avg volume growth → "Increasing" (Panel 4)
+_VOL_DECREASE_THRESHOLD = -20.0   # % MoM avg volume change → "Decreasing" (Panel 4)
 
 
 # ─── page config ─────────────────────────────────────────────────────────────
@@ -569,6 +571,7 @@ for _k, _v in [
     ("llm_buyer_trend_cache", {}),
     ("llm_bargain_cache", {}),
     ("llm_supplier_vol_cache", {}),
+    ("llm_supplier_vol_shift_cache", {}),
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -1723,6 +1726,189 @@ if st.session_state.selected_molecule:
                 _html(f"""
                 <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>{_p3_fallback}
+                </div>
+                """)
+
+        _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
+        _html('<div style="height:1rem;"></div>')
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # LLM PANEL 4 — Supplier Volume Shift Analysis
+        # ─────────────────────────────────────────────────────────────────────────
+        _p4_supplier_df = filtered_df[filtered_df["source"] == "Supplier"]
+
+        _html(f"""
+        <div class="pi-page-body">
+        <div class="pi-card">
+        <div class="pi-section-header">SUPPLIER VOLUME SHIFT ANALYSIS</div>
+        <div class="pi-section-title">Supplier Purchase Volume — Increasing &amp; Decreasing Trends</div>
+        <div class="pi-section-sub">Supplier perspective · {month_context} · {uom} · MoM volume change</div>
+        <div class="pi-card-content" style="margin-top:1rem;">
+        """)
+
+        if len(_p4_supplier_df) == 0:
+            _html('<div class="pi-info-banner">No supplier data available for the selected filters.</div>')
+        else:
+            # Step 1 — compute per-supplier monthly volume and MoM % change
+            _p4_monthly = (
+                _p4_supplier_df.groupby(["entity_name", "yyyymm"])["Sum_of_QTY"]
+                .sum()
+                .reset_index()
+                .sort_values(["entity_name", "yyyymm"])
+            )
+
+            _p4_supplier_stats = []
+            for _sup_name, _sup_grp in _p4_monthly.groupby("entity_name"):
+                _sup_grp = _sup_grp.sort_values("yyyymm")
+                _mom_pct = _sup_grp["Sum_of_QTY"].pct_change() * 100
+                _avg_mom = _mom_pct.dropna().mean()
+                _total_qty = _sup_grp["Sum_of_QTY"].sum()
+                if _avg_mom > _VOL_INCREASE_THRESHOLD:
+                    _trend = "Increasing"
+                elif _avg_mom < _VOL_DECREASE_THRESHOLD:
+                    _trend = "Decreasing"
+                else:
+                    _trend = "Stable"
+                _p4_supplier_stats.append({
+                    "entity_name": _sup_name,
+                    "avg_mom_vol_change": _avg_mom,
+                    "total_qty": _total_qty,
+                    "trend": _trend,
+                })
+
+            _p4_stats_df = pd.DataFrame(_p4_supplier_stats).sort_values("avg_mom_vol_change", ascending=False).reset_index(drop=True)
+            _p4_inc_df = _p4_stats_df[_p4_stats_df["trend"] == "Increasing"]
+            _p4_dec_df = _p4_stats_df[_p4_stats_df["trend"] == "Decreasing"]
+
+            # Step 2 — two-column layout
+            _p4_col_left, _p4_col_right = st.columns(2)
+
+            with _p4_col_left:
+                _html('<div style="font-weight:700;color:#16a34a;margin-bottom:0.5rem;">📈 Volume Increasing</div>')
+                if len(_p4_inc_df) == 0:
+                    _html('<div style="color:#64748b;font-size:0.85rem;">No suppliers with significantly increasing volume.</div>')
+                else:
+                    _p4_inc_rows = ""
+                    for _, _row in _p4_inc_df.iterrows():
+                        _p4_inc_rows += f"""
+                        <tr>
+                        <td>{_row['entity_name']}</td>
+                        <td>{fmt_qty(_row['total_qty'])}</td>
+                        <td>{_row['avg_mom_vol_change']:+.1f}%</td>
+                        <td><span class="badge-green">📈 Increasing</span></td>
+                        </tr>
+                        """
+                    _html(f"""
+                    <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
+                    <thead><tr>
+                    <th>Supplier</th><th>Total Vol</th><th>Avg MoM Change</th><th>Status</th>
+                    </tr></thead>
+                    <tbody>{_p4_inc_rows}</tbody>
+                    </table>
+                    """)
+
+            with _p4_col_right:
+                _html('<div style="font-weight:700;color:#dc2626;margin-bottom:0.5rem;">📉 Volume Decreasing</div>')
+                if len(_p4_dec_df) == 0:
+                    _html('<div style="color:#64748b;font-size:0.85rem;">No suppliers with significantly decreasing volume.</div>')
+                else:
+                    _p4_dec_rows = ""
+                    for _, _row in _p4_dec_df.iterrows():
+                        _p4_dec_rows += f"""
+                        <tr>
+                        <td>{_row['entity_name']}</td>
+                        <td>{fmt_qty(_row['total_qty'])}</td>
+                        <td>{_row['avg_mom_vol_change']:+.1f}%</td>
+                        <td><span class="badge-red">📉 Decreasing</span></td>
+                        </tr>
+                        """
+                    _html(f"""
+                    <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
+                    <thead><tr>
+                    <th>Supplier</th><th>Total Vol</th><th>Avg MoM Change</th><th>Status</th>
+                    </tr></thead>
+                    <tbody>{_p4_dec_rows}</tbody>
+                    </table>
+                    """)
+
+            # Step 3 — bar chart (top 10 suppliers by total volume, colored by trend)
+            _p4_top10 = _p4_stats_df.nlargest(10, "total_qty")
+            _p4_colors = []
+            for _t in _p4_top10["trend"]:
+                if _t == "Increasing":
+                    _p4_colors.append("#16a34a")
+                elif _t == "Decreasing":
+                    _p4_colors.append("#dc2626")
+                else:
+                    _p4_colors.append("#d97706")
+
+            _p4_fig = go.Figure(go.Bar(
+                x=_p4_top10["total_qty"],
+                y=_p4_top10["entity_name"],
+                orientation="h",
+                marker_color=_p4_colors,
+            ))
+            # Invisible traces for legend (color coding explanation)
+            _p4_fig.add_trace(go.Bar(x=[None], y=[None], orientation="h", name="Increasing", marker_color="#16a34a"))
+            _p4_fig.add_trace(go.Bar(x=[None], y=[None], orientation="h", name="Decreasing", marker_color="#dc2626"))
+            _p4_fig.add_trace(go.Bar(x=[None], y=[None], orientation="h", name="Stable", marker_color="#d97706"))
+            _p4_fig.update_layout(
+                height=300,
+                paper_bgcolor="white", plot_bgcolor="white",
+                margin=dict(l=40, r=20, t=20, b=40),
+                xaxis_title=f"Total Volume ({uom})",
+                yaxis=dict(autorange="reversed"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                barmode="overlay",
+            )
+            st.plotly_chart(_p4_fig, use_container_width=True)
+
+            # Step 4 — LLM narrative
+            _p4_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
+            _p4_cache = st.session_state.get("llm_supplier_vol_shift_cache", {})
+            if _p4_cache_key in _p4_cache:
+                _p4_llm_text = _p4_cache[_p4_cache_key]
+            else:
+                _p4_increasing_list = [
+                    {"supplier": r["entity_name"], "total_qty": int(r["total_qty"]), "avg_mom_pct": round(r["avg_mom_vol_change"], 1)}
+                    for _, r in _p4_inc_df.head(5).iterrows()
+                ]
+                _p4_decreasing_list = [
+                    {"supplier": r["entity_name"], "total_qty": int(r["total_qty"]), "avg_mom_pct": round(r["avg_mom_vol_change"], 1)}
+                    for _, r in _p4_dec_df.head(5).iterrows()
+                ]
+                _p4_prompt = (
+                    "You are a pharmaceutical procurement analyst. "
+                    f"Analyze the supplier volume shift patterns for {selected_mol} over {month_context}. "
+                    f"Suppliers with increasing volumes (avg MoM > {_VOL_INCREASE_THRESHOLD}%): {_p4_increasing_list}. "
+                    f"Suppliers with decreasing volumes (avg MoM < {_VOL_DECREASE_THRESHOLD}%): {_p4_decreasing_list}. "
+                    f"In 3-4 sentences, explain what these volume shifts mean for supply security, "
+                    f"which suppliers are gaining or losing share, "
+                    f"and give one procurement risk or opportunity recommendation for Cipla."
+                )
+                _p4_llm_text = _llm_analysis(_p4_prompt)
+                _p4_cache[_p4_cache_key] = _p4_llm_text
+                st.session_state["llm_supplier_vol_shift_cache"] = _p4_cache
+
+            if _p4_llm_text:
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">🤖 AI Analysis · </span>{_p4_llm_text}
+                </div>
+                """)
+            else:
+                # Fallback rule-based text
+                _p4_fallback = f"Supplier volume shift analysis for {selected_mol} over {month_context}. "
+                if len(_p4_inc_df) > 0:
+                    _p4_fallback += f"{len(_p4_inc_df)} supplier(s) show significantly increasing volumes. "
+                if len(_p4_dec_df) > 0:
+                    _p4_fallback += f"{len(_p4_dec_df)} supplier(s) show significantly decreasing volumes. "
+                if len(_p4_inc_df) == 0 and len(_p4_dec_df) == 0:
+                    _p4_fallback += "All suppliers show stable volume patterns. "
+                _p4_fallback += "Monitor suppliers with declining volumes for potential supply risk and consider diversifying to suppliers showing consistent volume growth."
+                _html(f"""
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">📊 Analysis · </span>{_p4_fallback}
                 </div>
                 """)
 
