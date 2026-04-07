@@ -654,7 +654,7 @@ def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
       - product name   → ITEM
       - quantity       → QTY
       - unit           → UQC
-      - item rate (inr)→ TOTAL_VALUE
+      - FOB(INR)       → TOTAL_VALUE  (actual total transaction value, Free On Board in INR)
 
     Returns a clean DataFrame with columns: yyyymm, ITEM, QTY, UQC, TOTAL_VALUE, GRADE_SPEC
     """
@@ -676,7 +676,7 @@ def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
     item_src = _find_col('product name', 'product_name')
     qty_src = _find_col('quantity', 'qty')
     unit_src = _find_col('unit', 'uqc')
-    value_src = _find_col('item rate(inr)', 'item rate (inr)', 'item_rate_(inr)', 'item rate inr', 'item_rate_inr', 'rate (inr)', 'rate(inr)')
+    value_src = _find_col('fob(inr)', 'fob (inr)', 'fob_inr', 'fob_(inr)', 'fob value inr', 'fob value (inr)')
 
     if date_src is None:
         raise ValueError(f"No Date column found in export file. Available columns: {list(df.columns)}")
