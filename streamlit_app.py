@@ -570,6 +570,7 @@ for _k, _v in [
     ("filters_applied", False),
     ("llm_buyer_trend_cache", {}),
     ("llm_bargain_cache", {}),
+    ("llm_supplier_price_cache", {}),
     ("llm_supplier_vol_cache", {}),
     ("llm_supplier_vol_shift_cache", {}),
 ]:
@@ -1411,20 +1412,9 @@ if st.session_state.selected_molecule:
                 </div>
                 """)
             else:
-                # Fallback rule-based text
-                if pct_lower >= pct_higher:
-                    _p1_fallback = (
-                        f"Buyers are generally purchasing {selected_mol} below Cipla's internal benchmark price "
-                        f"({pct_lower}% of months), suggesting a competitive external market."
-                    )
-                else:
-                    _p1_fallback = (
-                        f"Buyers are paying above Cipla's internal benchmark in {pct_higher}% of the selected months, "
-                        f"indicating Cipla has a cost advantage in external procurement."
-                    )
-                _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
-                <span style="font-weight:700;">📊 Analysis · </span>{_p1_fallback}
+                _html("""
+                <div style="background:#fff7ed;border-left:3px solid #d97706;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">⚠️ AI Analysis Unavailable · </span>Configure GEMINI_API_KEY to enable AI-powered narrative insights.
                 </div>
                 """)
 
@@ -1544,13 +1534,10 @@ if st.session_state.selected_molecule:
                 <span style="font-weight:700;">🤖 AI Analysis · </span>{_p2_llm_text}
                 </div>
                 """)
-            elif _p2_bargain_count == 0 and len(_p2_buyer_df) > 0:
-                _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
-                <span style="font-weight:700;">📊 Analysis · </span>
-                No buyers are purchasing {selected_mol} below the 5% discount threshold relative to Cipla's benchmark
-                price of ₹{_p2_cipla_price:,.0f}/{uom} in {month_context}.
-                This indicates Cipla's procurement price is competitive in the current market.
+            else:
+                _html("""
+                <div style="background:#fff7ed;border-left:3px solid #d97706;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">⚠️ AI Analysis Unavailable · </span>Configure GEMINI_API_KEY to enable AI-powered narrative insights.
                 </div>
                 """)
 
@@ -1712,20 +1699,9 @@ if st.session_state.selected_molecule:
                 </div>
                 """)
             else:
-                # Fallback rule-based text
-                _p3_rising = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Rising"]
-                _p3_falling = [r["entity_name"] for _, r in _p3_totals.iterrows() if r["trend"] == "Falling"]
-                _p3_fallback = f"Supplier avg price analysis for {selected_mol} over {month_context}. "
-                if _p3_rising:
-                    _p3_fallback += f"Suppliers with rising prices: {', '.join(_p3_rising[:3])}. "
-                if _p3_falling:
-                    _p3_fallback += f"Suppliers with falling prices: {', '.join(_p3_falling[:3])}. "
-                if not _p3_rising and not _p3_falling:
-                    _p3_fallback += "All suppliers show stable price patterns. "
-                _p3_fallback += "Consider negotiating with higher-priced suppliers or increasing allocation to lower-priced ones."
-                _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
-                <span style="font-weight:700;">📊 Analysis · </span>{_p3_fallback}
+                _html("""
+                <div style="background:#fff7ed;border-left:3px solid #d97706;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">⚠️ AI Analysis Unavailable · </span>Configure GEMINI_API_KEY to enable AI-powered narrative insights.
                 </div>
                 """)
 
@@ -1897,18 +1873,9 @@ if st.session_state.selected_molecule:
                 </div>
                 """)
             else:
-                # Fallback rule-based text
-                _p4_fallback = f"Supplier volume shift analysis for {selected_mol} over {month_context}. "
-                if len(_p4_inc_df) > 0:
-                    _p4_fallback += f"{len(_p4_inc_df)} supplier(s) show significantly increasing volumes. "
-                if len(_p4_dec_df) > 0:
-                    _p4_fallback += f"{len(_p4_dec_df)} supplier(s) show significantly decreasing volumes. "
-                if len(_p4_inc_df) == 0 and len(_p4_dec_df) == 0:
-                    _p4_fallback += "All suppliers show stable volume patterns. "
-                _p4_fallback += "Monitor suppliers with declining volumes for potential supply risk and consider diversifying to suppliers showing consistent volume growth."
-                _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
-                <span style="font-weight:700;">📊 Analysis · </span>{_p4_fallback}
+                _html("""
+                <div style="background:#fff7ed;border-left:3px solid #d97706;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <span style="font-weight:700;">⚠️ AI Analysis Unavailable · </span>Configure GEMINI_API_KEY to enable AI-powered narrative insights.
                 </div>
                 """)
 
