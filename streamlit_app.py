@@ -1327,7 +1327,20 @@ if st.session_state.selected_molecule:
                 paper_bgcolor="white", plot_bgcolor="white",
                 margin=dict(l=40, r=20, t=20, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis_title=f"Price (₹/{uom})",
+                yaxis=dict(
+                    title=f"Price (₹/{uom})",
+                    tickformat=",.0f",
+                    nticks=15,
+                    tickmode="auto",
+                    showgrid=True,
+                    gridcolor="#e4e9f2",
+                    gridwidth=1,
+                    griddash="dot",
+                    autorange=True,
+                ),
+                xaxis=dict(
+                    tickangle=-30,
+                ),
             )
             st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p1_fig, use_container_width=True)
@@ -1619,7 +1632,17 @@ if st.session_state.selected_molecule:
                 height=300,
                 paper_bgcolor="white", plot_bgcolor="white",
                 margin=dict(l=40, r=20, t=20, b=40),
-                yaxis_title=f"Avg Price (₹/{uom})",
+                yaxis=dict(
+                    title=f"Avg Price (₹/{uom})",
+                    tickformat=",.0f",
+                    nticks=15,
+                    tickmode="auto",
+                    showgrid=True,
+                    gridcolor="#e4e9f2",
+                    gridwidth=1,
+                    griddash="dot",
+                    autorange=True,
+                ),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.markdown('<div style="height:0.75rem;"></div>', unsafe_allow_html=True)
