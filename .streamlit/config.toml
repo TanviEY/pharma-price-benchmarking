@@ -10,3 +10,5 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+GEMINI_API_KEY = "AIzaSyCjr4ICLBSfmgc3MQB7KhfbA9WByzPNvVU"
