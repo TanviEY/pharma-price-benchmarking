@@ -559,7 +559,6 @@ for _k, _v in [
     ("cipla_table_page", 1),
     ("exim_table_page", 1),
     ("bargain_page", 1),
-    ("p4_vol_table_page", 1),
     ("cipla_from_month", None),
     ("cipla_to_month", None),
     ("filter_from_month", None),
@@ -1044,7 +1043,7 @@ if st.session_state.selected_molecule:
         st.session_state["filter_grades"] = _grades_sel if _grades_sel else _all_grades
         st.session_state["filters_applied"] = True
         # Reset paginations when filter changes
-        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page", "bargain_page", "p4_vol_table_page"]:
+        for _pk in ["bar_page", "comp_table_page", "cipla_table_page", "exim_table_page", "bargain_page"]:
             st.session_state[_pk] = 1
         st.rerun()
 
@@ -1472,54 +1471,45 @@ if st.session_state.selected_molecule:
             if _p2_bargain_count == 0:
                 _html('<div class="pi-info-banner">No buyers are purchasing below the bargain threshold in this period.</div>')
             else:
-                # Trend line chart — monthly avg price per bargain buyer
-                _p2_months = sorted(_p2_buyer_df["yyyymm"].unique())
-                _p2_labels = [yyyymm_to_label(m) for m in _p2_months]
-
-                fig = go.Figure()
-                for _idx, (_, _brow) in enumerate(_p2_bargain.iterrows()):
-                    _buyer_name = _brow["entity_name"]
-                    _buyer_monthly = []
-                    for _m in _p2_months:
-                        _bm = _p2_buyer_df[
-                            (_p2_buyer_df["entity_name"] == _buyer_name) & (_p2_buyer_df["yyyymm"] == _m)
-                        ]
-                        _buyer_monthly.append(_safe_wtd_avg(_bm["Sum_of_TOTAL_VALUE"], _bm["Sum_of_QTY"]))
-                    fig.add_trace(go.Scatter(
-                        x=_p2_labels, y=_buyer_monthly,
-                        mode="lines+markers", name=_buyer_name,
-                        line=dict(color=_avatar_color(_idx), width=2),
-                        marker=dict(size=6),
-                        connectgaps=True,
-                    ))
-
+                # Horizontal bar chart — buyer avg price vs Cipla benchmark
+                _p2_bar_colors = [
+                    "#16a34a" if r["wtd_price"] < _p2_cipla_price else "#d97706"
+                    for _, r in _p2_bargain.iterrows()
+                ]
+                _p2_bar_fig = go.Figure()
+                _p2_bar_fig.add_trace(go.Bar(
+                    orientation="h",
+                    x=_p2_bargain["wtd_price"].tolist(),
+                    y=_p2_bargain["entity_name"].tolist(),
+                    marker_color=_p2_bar_colors,
+                    name="Buyer Avg Price",
+                    hovertemplate="<b>%{y}</b><br>Avg Price: ₹%{x:,.0f}<extra></extra>",
+                ))
                 if _p2_cipla_price > 0:
-                    fig.add_hline(
-                        y=_p2_cipla_price,
+                    _p2_bar_fig.add_vline(
+                        x=_p2_cipla_price,
                         line_dash="dash", line_color="#1d4ed8", line_width=1.5,
                         annotation_text=f"Cipla ₹{_p2_cipla_price:,.0f}",
-                        annotation_position="right",
+                        annotation_position="top right",
                         annotation_font_size=10, annotation_font_color="#1d4ed8",
                     )
-
-                fig.update_layout(
-                    height=340,
+                _p2_bar_height = min(400, max(300, _p2_bargain_count * 32 + 60))
+                _p2_bar_fig.update_layout(
+                    height=_p2_bar_height,
                     paper_bgcolor="white", plot_bgcolor="white",
-                    margin=dict(l=40, r=120, t=20, b=40),
-                    xaxis=dict(title="Month", tickangle=-30),
-                    yaxis=dict(
+                    margin=dict(l=10, r=80, t=20, b=40),
+                    showlegend=False,
+                    xaxis=dict(
                         title=f"Avg Price (₹/{uom})",
                         tickformat=",.0f",
                         nticks=10,
                         showgrid=True,
                         gridcolor="#e4e9f2",
                         griddash="dot",
-                        autorange=True,
                     ),
-                    legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, font=dict(size=10)),
                 )
                 st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(_p2_bar_fig, use_container_width=True)
 
                 # Pagination for bargain table
                 _p2_page = st.session_state.get("bargain_page", 1)
@@ -1678,17 +1668,8 @@ if st.session_state.selected_molecule:
                 height=300,
                 paper_bgcolor="white", plot_bgcolor="white",
                 margin=dict(l=40, r=20, t=20, b=40),
+                yaxis_title=f"Avg Price (₹/{uom})",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis=dict(
-                    title=f"Avg Price (₹/{uom})",
-                    tickformat=",.0f",
-                    nticks=10,
-                    showgrid=True,
-                    gridcolor="#e4e9f2",
-                    gridwidth=1,
-                    griddash="dot",
-                    autorange=True,
-                ),
             )
             st.markdown('<div style="height:0.75rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p3_fig, use_container_width=True)
@@ -1829,40 +1810,27 @@ if st.session_state.selected_molecule:
 
             _p4_summary_df = pd.DataFrame(_p4_rows_data).sort_values("total_vol", ascending=False)
 
-            # Bar chart — monthly volume per supplier, color-coded by trend
+            # Bar chart — total volume per supplier, color-coded by trend
             _trend_color_map = {"Increased": "#16a34a", "Decreased": "#dc2626", "Stable": "#d97706"}
-            _p4_labels = [yyyymm_to_label(m) for m in _p4_months]
-
-            # Top suppliers by total volume (limit to top 10 for readability)
-            _p4_top_sups = _p4_summary_df.head(10)["supplier"].tolist()
-
+            _p4_bar_colors = [
+                _trend_color_map.get(r["trend"], "#64748b")
+                for _, r in _p4_summary_df.iterrows()
+            ]
             _p4_bar_fig = go.Figure()
-            for _idx, _sup_name in enumerate(_p4_top_sups):
-                _sup_row = _p4_summary_df[_p4_summary_df["supplier"] == _sup_name]
-                _sup_trend = _sup_row.iloc[0]["trend"] if len(_sup_row) > 0 else "Stable"
-                _sup_color = _trend_color_map.get(_sup_trend, "#64748b")
-                _sup_monthly_vols = []
-                for _m in _p4_months:
-                    _mv = _p4_vol_by_sup[
-                        (_p4_vol_by_sup["entity_name"] == _sup_name) & (_p4_vol_by_sup["yyyymm"] == _m)
-                    ]["vol"].sum()
-                    _sup_monthly_vols.append(float(_mv) if _mv else 0.0)
-                _p4_bar_fig.add_trace(go.Bar(
-                    name=_sup_name,
-                    x=_p4_labels,
-                    y=_sup_monthly_vols,
-                    marker_color=_sup_color,
-                    hovertemplate=f"<b>{_sup_name}</b><br>Month: %{{x}}<br>Volume: %{{y:,.0f}}<extra></extra>",
-                ))
-
+            _p4_bar_fig.add_trace(go.Bar(
+                x=_p4_summary_df["supplier"].tolist(),
+                y=_p4_summary_df["total_vol"].tolist(),
+                marker_color=_p4_bar_colors,
+                hovertemplate="<b>%{x}</b><br>Total Volume: %{y:,.0f}<extra></extra>",
+            ))
             _p4_bar_fig.update_layout(
-                height=360,
-                barmode="group",
+                height=320,
                 paper_bgcolor="white", plot_bgcolor="white",
                 margin=dict(l=40, r=20, t=20, b=80),
-                xaxis=dict(title="Month", tickangle=-30),
+                showlegend=False,
+                xaxis=dict(title="Supplier", tickangle=-30),
                 yaxis=dict(
-                    title=f"Volume ({uom})",
+                    title=f"Total Volume ({uom})",
                     tickformat=",.0f",
                     nticks=10,
                     showgrid=True,
@@ -1871,25 +1839,18 @@ if st.session_state.selected_molecule:
                     griddash="dot",
                     autorange=True,
                 ),
-                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, font=dict(size=9)),
             )
             st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p4_bar_fig, use_container_width=True)
 
-            # Summary table with pagination
+            # Summary table
             _p4_trend_badge = {
                 "Increased": '<span class="badge-green">📈 Increased</span>',
                 "Decreased": '<span class="badge-red">📉 Decreased</span>',
                 "Stable": '<span class="badge-amber">➡ Stable</span>',
             }
-            # Pagination for Panel 4 summary table
-            _p4_tbl_page = st.session_state.get("p4_vol_table_page", 1)
-            _p4_tbl_start = (_p4_tbl_page - 1) * _PAGE_SIZE
-            _p4_tbl_end = _p4_tbl_start + _PAGE_SIZE
-            _p4_summary_page = _p4_summary_df.iloc[_p4_tbl_start:_p4_tbl_end]
-
             _p4_table_rows = ""
-            for _, _r in _p4_summary_page.iterrows():
+            for _, _r in _p4_summary_df.iterrows():
                 _p4_table_rows += f"""
                 <tr>
                 <td>{_r['supplier']}</td>
@@ -1908,7 +1869,6 @@ if st.session_state.selected_molecule:
             <tbody>{_p4_table_rows}</tbody>
             </table>
             """)
-            _pagination_bar(len(_p4_summary_df), _PAGE_SIZE, _p4_tbl_page, "p4_vol_table_page", "p4_vol")
 
             # LLM Narrative
             _p4_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
