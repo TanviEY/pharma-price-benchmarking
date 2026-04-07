@@ -424,7 +424,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.2rem;
 }
 .pi-section-title { font-size:1rem; font-weight:700; color:var(--t1); margin-bottom:0.2rem; }
-.pi-section-sub { font-size:0.78rem; color:var(--t3); margin-bottom:0.8rem; }
+.pi-section-sub { font-size:0.78rem; color:var(--t3); margin-bottom:1.25rem; }
+.pi-card-content { padding-top: 1rem; }
 
 /* ── HORIZONTAL BAR CHART ── */
 .pi-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
@@ -1290,7 +1291,7 @@ if st.session_state.selected_molecule:
         <div class="pi-card">
         <div class="pi-section-header">BUYER PRICE TREND ANALYSIS</div>
         <div class="pi-section-title">Cipla Avg vs EXIM Market Avg — Monthly Trend</div>
-        """ + f'<div class="pi-section-sub">Buyer perspective · {month_context} · {uom}</div>')
+        """ + f'<div class="pi-section-sub">Buyer perspective · {month_context} · {uom}</div>' + '<div class="pi-card-content">')
 
         if _p1_empty:
             _html('<div class="pi-info-banner">No data available for the selected filters.</div>')
@@ -1328,6 +1329,7 @@ if st.session_state.selected_molecule:
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 yaxis_title=f"Price (₹/{uom})",
             )
+            st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p1_fig, use_container_width=True)
 
             # %Higher / %Lower / %Parity analytics
@@ -1356,7 +1358,7 @@ if st.session_state.selected_molecule:
                 pct_higher = pct_lower = pct_parity = 0.0
 
             _html(f"""
-            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem;">
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem;margin-bottom:0.5rem;">
             <span class="badge-red">📈 Higher {pct_higher}% of months</span>
             <span class="badge-green">📉 Lower {pct_lower}% of months</span>
             <span class="badge-amber">≈ Parity {pct_parity}% of months</span>
@@ -1388,7 +1390,7 @@ if st.session_state.selected_molecule:
 
             if _p1_llm_text:
                 _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">🤖 AI Analysis · </span>{_p1_llm_text}
                 </div>
                 """)
@@ -1405,12 +1407,12 @@ if st.session_state.selected_molecule:
                         f"indicating Cipla has a cost advantage in external procurement."
                     )
                 _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>{_p1_fallback}
                 </div>
                 """)
 
-        _html("</div></div>")  # pi-card, pi-page-body
+        _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
         _html('<div style="height:1rem;"></div>')
 
         # ─────────────────────────────────────────────────────────────────────────
@@ -1427,6 +1429,7 @@ if st.session_state.selected_molecule:
         <div class="pi-section-header">BARGAIN BUYER ANALYSIS</div>
         <div class="pi-section-title">Buyers Purchasing at Below-Benchmark Prices</div>
         <div class="pi-section-sub">Identified buyers · {month_context} · threshold = Cipla avg × 0.95</div>
+        <div class="pi-card-content">
         """)
 
         if len(_p2_buyer_df) == 0:
@@ -1512,13 +1515,13 @@ if st.session_state.selected_molecule:
 
             if _p2_llm_text:
                 _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">🤖 AI Analysis · </span>{_p2_llm_text}
                 </div>
                 """)
             elif _p2_bargain_count == 0 and len(_p2_buyer_df) > 0:
                 _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>
                 No buyers are purchasing {selected_mol} below the 5% discount threshold relative to Cipla's benchmark
                 price of ₹{_p2_cipla_price:,.0f}/{uom} in {month_context}.
@@ -1526,7 +1529,7 @@ if st.session_state.selected_molecule:
                 </div>
                 """)
 
-        _html("</div></div>")  # pi-card, pi-page-body
+        _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
         _html('<div style="height:1rem;"></div>')
 
         # ─────────────────────────────────────────────────────────────────────────
@@ -1540,6 +1543,7 @@ if st.session_state.selected_molecule:
         <div class="pi-section-header">SUPPLIER AVG PRICE ANALYTICS</div>
         <div class="pi-section-title">Supplier Avg Price Trends — Monthly Comparison</div>
         <div class="pi-section-sub">Supplier perspective · {month_context} · ₹/{uom}</div>
+        <div class="pi-card-content">
         """)
 
         if len(_p3_supplier_df) == 0:
@@ -1667,7 +1671,7 @@ if st.session_state.selected_molecule:
 
             if _p3_llm_text:
                 _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">🤖 AI Analysis · </span>{_p3_llm_text}
                 </div>
                 """)
@@ -1684,12 +1688,12 @@ if st.session_state.selected_molecule:
                     _p3_fallback += "All suppliers show stable price patterns. "
                 _p3_fallback += "Consider negotiating with higher-priced suppliers or increasing allocation to lower-priced ones."
                 _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
+                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>{_p3_fallback}
                 </div>
                 """)
 
-        _html("</div></div>")  # pi-card, pi-page-body
+        _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
         _html('<div style="height:1rem;"></div>')
 
         # ─────────────────────────────────────────────────────────────────────────
