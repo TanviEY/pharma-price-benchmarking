@@ -26,9 +26,11 @@ try:
     else:
         _GEMINI_AVAILABLE = False
         _gemini_model = None
-except Exception:
+        _GEMINI_INIT_ERROR = "No API key found"
+except Exception as e:
     _GEMINI_AVAILABLE = False
     _gemini_model = None
+    _GEMINI_INIT_ERROR = str(e)
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
