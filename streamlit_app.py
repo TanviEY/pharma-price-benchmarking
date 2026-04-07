@@ -1327,16 +1327,7 @@ if st.session_state.selected_molecule:
                 paper_bgcolor="white", plot_bgcolor="white",
                 margin=dict(l=40, r=20, t=20, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis=dict(
-                    title=f"Price (₹/{uom})",
-                    tickformat=",.0f",
-                    nticks=10,
-                    showgrid=True,
-                    gridcolor="#e4e9f2",
-                    gridwidth=1,
-                    griddash="dot",
-                    autorange=True,
-                ),
+                yaxis_title=f"Price (₹/{uom})",
             )
             st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
             st.plotly_chart(_p1_fig, use_container_width=True)
@@ -1471,46 +1462,6 @@ if st.session_state.selected_molecule:
             if _p2_bargain_count == 0:
                 _html('<div class="pi-info-banner">No buyers are purchasing below the bargain threshold in this period.</div>')
             else:
-                # Horizontal bar chart — buyer avg price vs Cipla benchmark
-                _p2_bar_colors = [
-                    "#16a34a" if r["wtd_price"] < _p2_cipla_price else "#d97706"
-                    for _, r in _p2_bargain.iterrows()
-                ]
-                _p2_bar_fig = go.Figure()
-                _p2_bar_fig.add_trace(go.Bar(
-                    orientation="h",
-                    x=_p2_bargain["wtd_price"].tolist(),
-                    y=_p2_bargain["entity_name"].tolist(),
-                    marker_color=_p2_bar_colors,
-                    name="Buyer Avg Price",
-                    hovertemplate="<b>%{y}</b><br>Avg Price: ₹%{x:,.0f}<extra></extra>",
-                ))
-                if _p2_cipla_price > 0:
-                    _p2_bar_fig.add_vline(
-                        x=_p2_cipla_price,
-                        line_dash="dash", line_color="#1d4ed8", line_width=1.5,
-                        annotation_text=f"Cipla ₹{_p2_cipla_price:,.0f}",
-                        annotation_position="top right",
-                        annotation_font_size=10, annotation_font_color="#1d4ed8",
-                    )
-                _p2_bar_height = min(400, max(300, _p2_bargain_count * 32 + 60))
-                _p2_bar_fig.update_layout(
-                    height=_p2_bar_height,
-                    paper_bgcolor="white", plot_bgcolor="white",
-                    margin=dict(l=10, r=80, t=20, b=40),
-                    showlegend=False,
-                    xaxis=dict(
-                        title=f"Avg Price (₹/{uom})",
-                        tickformat=",.0f",
-                        nticks=10,
-                        showgrid=True,
-                        gridcolor="#e4e9f2",
-                        griddash="dot",
-                    ),
-                )
-                st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-                st.plotly_chart(_p2_bar_fig, use_container_width=True)
-
                 # Pagination for bargain table
                 _p2_page = st.session_state.get("bargain_page", 1)
                 _p2_page_size = _PAGE_SIZE  # 10
@@ -1749,172 +1700,6 @@ if st.session_state.selected_molecule:
                 _html(f"""
                 <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>{_p3_fallback}
-                </div>
-                """)
-
-        _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
-        _html('<div style="height:1rem;"></div>')
-
-        # ─────────────────────────────────────────────────────────────────────────
-        # LLM PANEL 4 — Supplier Volume Analysis
-        # ─────────────────────────────────────────────────────────────────────────
-        _p4_supplier_df = filtered_df[filtered_df["source"] == "Supplier"]
-
-        _html(f"""
-        <div class="pi-page-body">
-        <div class="pi-card">
-        <div class="pi-section-header">SUPPLIER VOLUME ANALYTICS</div>
-        <div class="pi-section-title">Supplier Volume Trends — Increased vs Decreased After Panel 3</div>
-        """ + f'<div class="pi-section-sub">Supplier perspective · {month_context} · {uom}</div>' + '<div class="pi-card-content" style="margin-top:1rem;">')
-
-        if len(_p4_supplier_df) == 0:
-            _html('<div class="pi-info-banner">No supplier data available for the selected filters.</div>')
-        else:
-            # Compute total volume (Sum_of_QTY) per supplier per month
-            _p4_months = sorted(_p4_supplier_df["yyyymm"].unique())
-            _p4_vol_by_sup = (
-                _p4_supplier_df.groupby(["entity_name", "yyyymm"])["Sum_of_QTY"]
-                .sum()
-                .reset_index()
-                .rename(columns={"Sum_of_QTY": "vol"})
-            )
-
-            # Supplier totals and trend classification
-            _p4_rows_data = []
-            for _sup_name in sorted(_p4_supplier_df["entity_name"].unique()):
-                _sup_vol = _p4_vol_by_sup[_p4_vol_by_sup["entity_name"] == _sup_name].sort_values("yyyymm")
-                _total_vol = _sup_vol["vol"].sum()
-                if len(_sup_vol) >= 2:
-                    _first_vol = _sup_vol.iloc[0]["vol"]
-                    _last_vol = _sup_vol.iloc[-1]["vol"]
-                    _pct_change = ((_last_vol - _first_vol) / _first_vol * 100) if _first_vol > 0 else 0
-                    if _pct_change > 5:
-                        _vol_trend = "Increased"
-                    elif _pct_change < -5:
-                        _vol_trend = "Decreased"
-                    else:
-                        _vol_trend = "Stable"
-                else:
-                    _first_vol = _sup_vol.iloc[0]["vol"] if len(_sup_vol) == 1 else 0
-                    _last_vol = _first_vol
-                    _pct_change = 0.0
-                    _vol_trend = "Stable"
-                _p4_rows_data.append({
-                    "supplier": _sup_name,
-                    "total_vol": _total_vol,
-                    "first_vol": _first_vol,
-                    "last_vol": _last_vol,
-                    "pct_change": _pct_change,
-                    "trend": _vol_trend,
-                })
-
-            _p4_summary_df = pd.DataFrame(_p4_rows_data).sort_values("total_vol", ascending=False)
-
-            # Bar chart — total volume per supplier, color-coded by trend
-            _trend_color_map = {"Increased": "#16a34a", "Decreased": "#dc2626", "Stable": "#d97706"}
-            _p4_bar_colors = [
-                _trend_color_map.get(r["trend"], "#64748b")
-                for _, r in _p4_summary_df.iterrows()
-            ]
-            _p4_bar_fig = go.Figure()
-            _p4_bar_fig.add_trace(go.Bar(
-                x=_p4_summary_df["supplier"].tolist(),
-                y=_p4_summary_df["total_vol"].tolist(),
-                marker_color=_p4_bar_colors,
-                hovertemplate="<b>%{x}</b><br>Total Volume: %{y:,.0f}<extra></extra>",
-            ))
-            _p4_bar_fig.update_layout(
-                height=320,
-                paper_bgcolor="white", plot_bgcolor="white",
-                margin=dict(l=40, r=20, t=20, b=80),
-                showlegend=False,
-                xaxis=dict(title="Supplier", tickangle=-30),
-                yaxis=dict(
-                    title=f"Total Volume ({uom})",
-                    tickformat=",.0f",
-                    nticks=10,
-                    showgrid=True,
-                    gridcolor="#e4e9f2",
-                    gridwidth=1,
-                    griddash="dot",
-                    autorange=True,
-                ),
-            )
-            st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-            st.plotly_chart(_p4_bar_fig, use_container_width=True)
-
-            # Summary table
-            _p4_trend_badge = {
-                "Increased": '<span class="badge-green">📈 Increased</span>',
-                "Decreased": '<span class="badge-red">📉 Decreased</span>',
-                "Stable": '<span class="badge-amber">➡ Stable</span>',
-            }
-            _p4_table_rows = ""
-            for _, _r in _p4_summary_df.iterrows():
-                _p4_table_rows += f"""
-                <tr>
-                <td>{_r['supplier']}</td>
-                <td>{int(_r['total_vol']):,}</td>
-                <td>{int(_r['first_vol']):,}</td>
-                <td>{int(_r['last_vol']):,}</td>
-                <td>{_r['pct_change']:+.1f}%</td>
-                <td>{_p4_trend_badge.get(_r['trend'], '')}</td>
-                </tr>
-                """
-            _html(f"""
-            <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
-            <thead><tr>
-            <th>Supplier</th><th>Total Volume ({uom})</th><th>First Month Vol</th><th>Last Month Vol</th><th>% Change</th><th>Trend</th>
-            </tr></thead>
-            <tbody>{_p4_table_rows}</tbody>
-            </table>
-            """)
-
-            # LLM Narrative
-            _p4_cache_key = (selected_mol, _f_from_yyyymm, _f_to_yyyymm)
-            _p4_cache = st.session_state.get("llm_supplier_vol_cache", {})
-            if _p4_cache_key in _p4_cache:
-                _p4_llm_text = _p4_cache[_p4_cache_key]
-            else:
-                _p4_increased = [r["supplier"] for _, r in _p4_summary_df.iterrows() if r["trend"] == "Increased"]
-                _p4_decreased = [r["supplier"] for _, r in _p4_summary_df.iterrows() if r["trend"] == "Decreased"]
-                _p4_vol_summary = [
-                    {"supplier": r["supplier"], "total_vol": int(r["total_vol"]), "pct_change": round(r["pct_change"], 1), "trend": r["trend"]}
-                    for _, r in _p4_summary_df.head(8).iterrows()
-                ]
-                _p4_prompt = (
-                    f"You are a pharmaceutical procurement analyst. "
-                    f"Analyze the supplier volume trends for {selected_mol} over {month_context}. "
-                    f"Suppliers with increased volume: {_p4_increased[:5]}. "
-                    f"Suppliers with decreased volume: {_p4_decreased[:5]}. "
-                    f"Top suppliers by total volume: {_p4_vol_summary}. "
-                    f"In 3-4 sentences, describe which suppliers grew or reduced their supply, "
-                    f"what this implies for supply security and Cipla's procurement flexibility, "
-                    f"and give one concrete sourcing recommendation."
-                )
-                _p4_llm_text = _llm_analysis(_p4_prompt)
-                _p4_cache[_p4_cache_key] = _p4_llm_text
-                st.session_state["llm_supplier_vol_cache"] = _p4_cache
-
-            if _p4_llm_text:
-                _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
-                <span style="font-weight:700;">🤖 AI Analysis · </span>{_p4_llm_text}
-                </div>
-                """)
-            else:
-                # Fallback rule-based text
-                _p4_fallback = f"Supplier volume analysis for {selected_mol} over {month_context}. "
-                if _p4_increased:
-                    _p4_fallback += f"Suppliers with increased volume: {', '.join(_p4_increased[:3])}. "
-                if _p4_decreased:
-                    _p4_fallback += f"Suppliers with decreased volume: {', '.join(_p4_decreased[:3])}. "
-                if not _p4_increased and not _p4_decreased:
-                    _p4_fallback += "All suppliers show stable volume patterns. "
-                _p4_fallback += "Consider increasing allocation to suppliers who have grown their supply capacity."
-                _html(f"""
-                <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
-                <span style="font-weight:700;">📊 Analysis · </span>{_p4_fallback}
                 </div>
                 """)
 
@@ -2175,7 +1960,7 @@ if st.session_state.selected_molecule:
         st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
 
         # ─────────────────────────────────────────────────────────────────────────
-        # SECTION 3 — Dot Chart (Price over Time)
+        # SECTION 3 — Bubble Chart (Price over Time)
         # ─────────────────────────────────────────────────────────────────────────
         # Group by entity + yyyymm (buyer-only for competitors, plus Cipla)
         bubble_df = (
@@ -2202,6 +1987,10 @@ if st.session_state.selected_molecule:
             top25_ents_b = set()
         # Always include Cipla entities
         entities_bubble = sorted(top25_ents_b | cipla_bubble_ents)
+
+        # Scale bubble sizes: sqrt(qty / max_qty) * 60 + 10
+        max_qty_b = bubble_df["sum_qty"].max() if bubble_df["sum_qty"].max() > 0 else 1
+        bubble_df["bubble_size"] = ((bubble_df["sum_qty"] / max_qty_b) ** 0.5) * 60 + 10
 
         # Color map
         entity_colors_b = {}
@@ -2258,20 +2047,19 @@ if st.session_state.selected_molecule:
                 mode="markers",
                 name=trace_name,
                 marker=dict(
-                    size=10,
+                    size=ent_df["bubble_size"].tolist(),
+                    sizemode="diameter",
+                    sizeref=1,
                     color=color,
-                    opacity=0.85,
+                    opacity=0.75,
                     line=dict(width=2, color="white"),
                 ),
-                customdata=list(zip(ent_df["sum_qty"], ent_df["yyyymm"], ent_df["total_val"])),
+                customdata=list(zip(ent_df["sum_qty"], ent_df["yyyymm"])),
                 hovertemplate=(
                     f"<b>{trace_name}</b><br>"
-                    "──────────────────<br>"
-                    "Month:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%{x}<br>"
-                    f"Avg Price:&nbsp;&nbsp;&nbsp;₹%{{y:,.0f}} /{uom}<br>"
-                    f"Volume:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%{{customdata[0]:,.0f}} {uom}<br>"
-                    "Total Value: ₹%{customdata[2]:,.0f}"
-                    "<extra></extra>"
+                    "Month: %{x}<br>"
+                    f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
+                    f"Volume: %{{customdata[0]:,.0f}} {uom}<extra></extra>"
                 ),
             ))
 
@@ -2308,8 +2096,8 @@ if st.session_state.selected_molecule:
         st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
         _html(f"""
         <div class="pi-card" style="margin-bottom:0.5rem;">
-          <div class="pi-section-title">Price over Time · Dot Chart Analysis</div>
-          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Hover for details · Colour = Entity</div>
+          <div class="pi-section-title">Price over Time · Bubble Analysis</div>
+          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Bubble size = Volume · Colour = Entity</div>
         </div>
         """)
         st.markdown("</div>", unsafe_allow_html=True)
