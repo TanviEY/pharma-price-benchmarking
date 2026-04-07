@@ -1120,6 +1120,164 @@ if st.session_state.selected_molecule:
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ─────────────────────────────────────────────────────────────────────────
+        # SECTION 1 — 6 KPI Cards with Sparklines
+        # ─────────────────────────────────────────────────────────────────────────
+        cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
+        market_df_f = filtered_df[filtered_df["source"] == "Buyer"]
+        buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
+
+        cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
+        market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"]) * import_duty_mult
+        cipla_n_records = len(cipla_df_f)
+        cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
+        market_n_ent = market_df_f["entity_name"].nunique()
+
+        # Per-entity WTD avg (buyer-only for Lowest/Highest Competitor cards)
+        low_price = high_price = 0.0
+        low_ent = high_ent = "—"
+        if len(buyer_df_f) > 0:
+            ent_prices = (
+                buyer_df_f.groupby("entity_name")
+                .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
+                .reset_index(name="wtd_price")
+            )
+            ent_prices = ent_prices[ent_prices["wtd_price"] > 0]
+            if len(ent_prices) > 0:
+                min_row = ent_prices.loc[ent_prices["wtd_price"].idxmin()]
+                max_row = ent_prices.loc[ent_prices["wtd_price"].idxmax()]
+                low_price, low_ent = min_row["wtd_price"] * import_duty_mult, min_row["entity_name"]
+                high_price, high_ent = max_row["wtd_price"] * import_duty_mult, max_row["entity_name"]
+
+        cost_adv = cipla_price - market_price if market_price > 0 else 0.0
+        cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
+
+        # Sparklines — monthly WTD avg across ALL months (consolidated_df, not filtered)
+        months_sorted_all = sorted(consolidated_df["yyyymm"].unique())
+
+        def _monthly_wtd(src_fn, months):
+            vals = []
+            for m in months:
+                mdf = consolidated_df[consolidated_df["yyyymm"] == m]
+                mdf = src_fn(mdf)
+                vals.append(_safe_wtd_avg(mdf["Sum_of_TOTAL_VALUE"], mdf["Sum_of_QTY"]))
+            return vals
+
+        cipla_spark = _render_sparkline(
+            _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
+        )
+        market_spark = _render_sparkline(
+            _monthly_wtd(lambda d: d[d["source"] == "Buyer"], months_sorted_all), "#0891b2"
+        )
+
+        # Export sparkline — monthly weighted avg from export_df_cached with active filters
+        if not export_df_cached.empty:
+            _export_mask = (
+                (export_df_cached["UQC"].isin(_f_uoms))
+                & (export_df_cached["GRADE_SPEC"].isin(_f_grades))
+            )
+            if _f_from_yyyymm and _f_to_yyyymm:
+                _export_mask = (
+                    _export_mask
+                    & (export_df_cached["yyyymm"] >= _f_from_yyyymm)
+                    & (export_df_cached["yyyymm"] <= _f_to_yyyymm)
+                )
+            _export_filtered = export_df_cached[_export_mask]
+            export_avg_price = _safe_wtd_avg(_export_filtered["TOTAL_VALUE"], _export_filtered["QTY"])
+            _export_by_month = {
+                m: grp for m, grp in _export_filtered.groupby("yyyymm")
+            }
+            _export_spark_vals = [
+                _safe_wtd_avg(_export_by_month[_m]["TOTAL_VALUE"], _export_by_month[_m]["QTY"])
+                if _m in _export_by_month else 0.0
+                for _m in months_sorted_all
+            ]
+        else:
+            export_avg_price = 0.0
+            _export_spark_vals = [0.0] * len(months_sorted_all)
+        export_spark = _render_sparkline(_export_spark_vals, "#7c3aed")
+
+        # Cost advantage badge
+        if cipla_price > 0 and market_price > 0:
+            adv_sym = "▼" if cost_adv < 0 else "▲"
+            adv_word = "below" if cost_adv < 0 else "above"
+            adv_text = f"{adv_sym} {cost_pct:.1f}% {adv_word} market"
+        else:
+            adv_text = month_context
+
+        st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+        k1, k2, k_export, k3, k4, k5 = st.columns(6)
+
+        with k1:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#3b82f6;">
+              <div class="pi-kpi-label">Cipla WTD Avg · ERP</div>
+              <div class="pi-kpi-value">₹{cipla_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{month_context}</span></div>
+              <div class="pi-kpi-note">{cipla_n_records} POs · {fmt_qty(cipla_total_qty)} {uom}</div>
+              {cipla_spark}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k2:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#0891b2;">
+              <div class="pi-kpi-label">EXIM Market Avg (Import)</div>
+              <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
+              <div class="pi-kpi-note">EXIM import data · incl. {import_duty_pct}% duty</div>
+              {market_spark}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k_export:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#7c3aed;">
+              <div class="pi-kpi-label">EXIM Market Avg (Export)</div>
+              <div class="pi-kpi-value">₹{export_avg_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#f5f3ff;color:#7c3aed;">EXIM export data</span></div>
+              <div class="pi-kpi-note">Weighted avg across period</div>
+              {export_spark}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k3:
+            adv_bg = "#f0fdf4" if cost_adv <= 0 else "#fff1f2"
+            adv_fg = "#16a34a" if cost_adv <= 0 else "#dc2626"
+            adv_sign = "−" if cost_adv < 0 else "+"
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#16a34a;">
+              <div class="pi-kpi-label">Cost Advantage</div>
+              <div class="pi-kpi-value" style="color:{adv_fg};">{adv_sign}₹{abs(cost_adv):,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:{adv_bg};color:{adv_fg};">{adv_text}</span></div>
+              <div class="pi-kpi-note">vs EXIM avg</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k4:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#d97706;">
+              <div class="pi-kpi-label">Lowest Competitor</div>
+              <div class="pi-kpi-value">₹{low_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#fffbeb;color:#d97706;">{low_ent[:22] if low_ent != "—" else "—"}</span></div>
+              <div class="pi-kpi-note">period avg · incl. {import_duty_pct}% duty</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k5:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#dc2626;">
+              <div class="pi-kpi-label">Highest Competitor</div>
+              <div class="pi-kpi-value">₹{high_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#fff1f2;color:#dc2626;">{high_ent[:22] if high_ent != "—" else "—"}</span></div>
+              <div class="pi-kpi-note">premium grade · incl. {import_duty_pct}% duty</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
+        st.markdown('<div style="height:1.5rem;"></div>', unsafe_allow_html=True)
+
+        # ─────────────────────────────────────────────────────────────────────────
         # LLM PANEL 1 — Buyer Price Trend Analysis
         # ─────────────────────────────────────────────────────────────────────────
         _p1_cipla_df = filtered_df[filtered_df["source"] == "Cipla"]
@@ -1533,164 +1691,6 @@ if st.session_state.selected_molecule:
 
         _html("</div></div>")  # pi-card, pi-page-body
         _html('<div style="height:1rem;"></div>')
-
-        # ─────────────────────────────────────────────────────────────────────────
-        # SECTION 1 — 5 KPI Cards with Sparklines
-        # ─────────────────────────────────────────────────────────────────────────
-        cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
-        market_df_f = filtered_df[filtered_df["source"] == "Buyer"]
-        buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
-
-        cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
-        market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"]) * import_duty_mult
-        cipla_n_records = len(cipla_df_f)
-        cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
-        market_n_ent = market_df_f["entity_name"].nunique()
-
-        # Per-entity WTD avg (buyer-only for Lowest/Highest Competitor cards)
-        low_price = high_price = 0.0
-        low_ent = high_ent = "—"
-        if len(buyer_df_f) > 0:
-            ent_prices = (
-                buyer_df_f.groupby("entity_name")
-                .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
-                .reset_index(name="wtd_price")
-            )
-            ent_prices = ent_prices[ent_prices["wtd_price"] > 0]
-            if len(ent_prices) > 0:
-                min_row = ent_prices.loc[ent_prices["wtd_price"].idxmin()]
-                max_row = ent_prices.loc[ent_prices["wtd_price"].idxmax()]
-                low_price, low_ent = min_row["wtd_price"] * import_duty_mult, min_row["entity_name"]
-                high_price, high_ent = max_row["wtd_price"] * import_duty_mult, max_row["entity_name"]
-
-        cost_adv = cipla_price - market_price if market_price > 0 else 0.0
-        cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
-
-        # Sparklines — monthly WTD avg across ALL months (consolidated_df, not filtered)
-        months_sorted_all = sorted(consolidated_df["yyyymm"].unique())
-
-        def _monthly_wtd(src_fn, months):
-            vals = []
-            for m in months:
-                mdf = consolidated_df[consolidated_df["yyyymm"] == m]
-                mdf = src_fn(mdf)
-                vals.append(_safe_wtd_avg(mdf["Sum_of_TOTAL_VALUE"], mdf["Sum_of_QTY"]))
-            return vals
-
-        cipla_spark = _render_sparkline(
-            _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
-        )
-        market_spark = _render_sparkline(
-            _monthly_wtd(lambda d: d[d["source"] == "Buyer"], months_sorted_all), "#0891b2"
-        )
-
-        # Export sparkline — monthly weighted avg from export_df_cached with active filters
-        if not export_df_cached.empty:
-            _export_mask = (
-                (export_df_cached["UQC"].isin(_f_uoms))
-                & (export_df_cached["GRADE_SPEC"].isin(_f_grades))
-            )
-            if _f_from_yyyymm and _f_to_yyyymm:
-                _export_mask = (
-                    _export_mask
-                    & (export_df_cached["yyyymm"] >= _f_from_yyyymm)
-                    & (export_df_cached["yyyymm"] <= _f_to_yyyymm)
-                )
-            _export_filtered = export_df_cached[_export_mask]
-            export_avg_price = _safe_wtd_avg(_export_filtered["TOTAL_VALUE"], _export_filtered["QTY"])
-            _export_by_month = {
-                m: grp for m, grp in _export_filtered.groupby("yyyymm")
-            }
-            _export_spark_vals = [
-                _safe_wtd_avg(_export_by_month[_m]["TOTAL_VALUE"], _export_by_month[_m]["QTY"])
-                if _m in _export_by_month else 0.0
-                for _m in months_sorted_all
-            ]
-        else:
-            export_avg_price = 0.0
-            _export_spark_vals = [0.0] * len(months_sorted_all)
-        export_spark = _render_sparkline(_export_spark_vals, "#7c3aed")
-
-        # Cost advantage badge
-        if cipla_price > 0 and market_price > 0:
-            adv_sym = "▼" if cost_adv < 0 else "▲"
-            adv_word = "below" if cost_adv < 0 else "above"
-            adv_text = f"{adv_sym} {cost_pct:.1f}% {adv_word} market"
-        else:
-            adv_text = month_context
-
-        st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-        k1, k2, k_export, k3, k4, k5 = st.columns(6)
-
-        with k1:
-            st.markdown(f"""
-            <div class="pi-kpi-card" style="border-top-color:#3b82f6;">
-              <div class="pi-kpi-label">Cipla WTD Avg · ERP</div>
-              <div class="pi-kpi-value">₹{cipla_price:,.0f} <span>/{uom}</span></div>
-              <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{month_context}</span></div>
-              <div class="pi-kpi-note">{cipla_n_records} POs · {fmt_qty(cipla_total_qty)} {uom}</div>
-              {cipla_spark}
-            </div>
-            """, unsafe_allow_html=True)
-
-        with k2:
-            st.markdown(f"""
-            <div class="pi-kpi-card" style="border-top-color:#0891b2;">
-              <div class="pi-kpi-label">EXIM Market Avg (Import)</div>
-              <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
-              <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
-              <div class="pi-kpi-note">EXIM import data · incl. {import_duty_pct}% duty</div>
-              {market_spark}
-            </div>
-            """, unsafe_allow_html=True)
-
-        with k_export:
-            st.markdown(f"""
-            <div class="pi-kpi-card" style="border-top-color:#7c3aed;">
-              <div class="pi-kpi-label">EXIM Market Avg (Export)</div>
-              <div class="pi-kpi-value">₹{export_avg_price:,.0f} <span>/{uom}</span></div>
-              <div><span class="pi-kpi-badge" style="background:#f5f3ff;color:#7c3aed;">EXIM export data</span></div>
-              <div class="pi-kpi-note">Weighted avg across period</div>
-              {export_spark}
-            </div>
-            """, unsafe_allow_html=True)
-
-        with k3:
-            adv_bg = "#f0fdf4" if cost_adv <= 0 else "#fff1f2"
-            adv_fg = "#16a34a" if cost_adv <= 0 else "#dc2626"
-            adv_sign = "−" if cost_adv < 0 else "+"
-            st.markdown(f"""
-            <div class="pi-kpi-card" style="border-top-color:#16a34a;">
-              <div class="pi-kpi-label">Cost Advantage</div>
-              <div class="pi-kpi-value" style="color:{adv_fg};">{adv_sign}₹{abs(cost_adv):,.0f} <span>/{uom}</span></div>
-              <div><span class="pi-kpi-badge" style="background:{adv_bg};color:{adv_fg};">{adv_text}</span></div>
-              <div class="pi-kpi-note">vs EXIM avg</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with k4:
-            st.markdown(f"""
-            <div class="pi-kpi-card" style="border-top-color:#d97706;">
-              <div class="pi-kpi-label">Lowest Competitor</div>
-              <div class="pi-kpi-value">₹{low_price:,.0f} <span>/{uom}</span></div>
-              <div><span class="pi-kpi-badge" style="background:#fffbeb;color:#d97706;">{low_ent[:22] if low_ent != "—" else "—"}</span></div>
-              <div class="pi-kpi-note">period avg · incl. {import_duty_pct}% duty</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with k5:
-            st.markdown(f"""
-            <div class="pi-kpi-card" style="border-top-color:#dc2626;">
-              <div class="pi-kpi-label">Highest Competitor</div>
-              <div class="pi-kpi-value">₹{high_price:,.0f} <span>/{uom}</span></div>
-              <div><span class="pi-kpi-badge" style="background:#fff1f2;color:#dc2626;">{high_ent[:22] if high_ent != "—" else "—"}</span></div>
-              <div class="pi-kpi-note">premium grade · incl. {import_duty_pct}% duty</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
-        st.markdown('<div style="height:1.5rem;"></div>', unsafe_allow_html=True)
 
         # ─────────────────────────────────────────────────────────────────────────
         # SECTION 2 — Competitor Benchmark (1.5 : 1 layout)
