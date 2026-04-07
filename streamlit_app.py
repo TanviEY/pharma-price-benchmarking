@@ -1120,7 +1120,7 @@ if st.session_state.selected_molecule:
             st.markdown("</div>", unsafe_allow_html=True)
 
         # ─────────────────────────────────────────────────────────────────────────
-        # SECTION 1 — 5 KPI Cards with Sparklines
+        # SECTION 1 — 6 KPI Cards with Sparklines
         # ─────────────────────────────────────────────────────────────────────────
         cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
         market_df_f = filtered_df[filtered_df["source"] == "Buyer"]
