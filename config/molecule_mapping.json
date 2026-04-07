@@ -2,6 +2,7 @@
   "molecules": {
     "azithromycin": {
       "file_patterns": ["azithromycin_*.xlsx", "azithro_*.xlsx"],
+      "export_file_patterns": ["Azithromycin Export_*.xlsx", "azithromycin Export_*.xlsx"],
       "aliases": ["azithromycoon", "azithro", "azi", "zithromax", "azith"],
       "cipla_api_filter": "AZITHROMYCIN DIHYDRATE",
       "status": "active",
@@ -9,6 +10,7 @@
     },
     "lamivudine": {
       "file_patterns": ["Lamivudine_*.xlsx", "lamivudine_*.xlsx"],
+      "export_file_patterns": ["Lamivudine Export_*.xlsx", "lamivudine Export_*.xlsx"],
       "aliases": ["lami", "3tc", "epivir", "lamivudin"],
       "cipla_api_filter": "LAMIVUDINE",
       "status": "active",
@@ -16,6 +18,7 @@
     },
     "tenofovir_disoproxil_fumarate": {
       "file_patterns": ["TENOFOVIR_DISOPROXIL_FUMARATE_*.xlsx", "tenofovir_disoproxil_fumarate_*.xlsx", "tenofovir_*.xlsx"],
+      "export_file_patterns": ["TENOFOVIR DISOPROXIL FUMARATE_Export_*.xlsx", "tenofovir disoproxil fumarate_Export_*.xlsx", "Tenofovir Disoproxil Fumarate_Export_*.xlsx"],
       "aliases": ["tenofovir", "tdf", "viread", "tenofovir disoproxil", "tenofovir df"],
       "cipla_api_filter": "TENOFOVIR DISOPROXIL FUMARATE",
       "status": "active",

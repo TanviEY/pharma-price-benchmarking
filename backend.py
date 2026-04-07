@@ -607,6 +607,115 @@ def discover_molecule_files(molecule: str, data_dir: str, molecule_mapping: Dict
     return sorted(found_files)
 
 
+def discover_export_files(molecule: str, data_dir: str, molecule_mapping: Dict) -> List[str]:
+    """
+    Discover export files for a given molecule using 'export_file_patterns'.
+
+    Args:
+        molecule: Molecule name (e.g., 'azithromycin')
+        data_dir: Path to the data directory
+        molecule_mapping: Molecule mapping config dict
+
+    Returns:
+        List of matching export file paths, or empty list if none found.
+    """
+    if molecule not in molecule_mapping['molecules']:
+        return []
+
+    patterns = molecule_mapping['molecules'][molecule].get('export_file_patterns', [])
+    if not patterns:
+        return []
+
+    found_files = set()
+    data_path = Path(data_dir)
+
+    # Case-sensitive glob first
+    for pattern in patterns:
+        file_path = os.path.join(data_path, pattern)
+        found_files.update(glob.glob(file_path))
+
+    # Case-insensitive fallback: scan directory
+    if data_path.exists():
+        for f in data_path.iterdir():
+            if f.is_file():
+                for pattern in patterns:
+                    if fnmatch.fnmatch(f.name.lower(), pattern.lower()):
+                        found_files.add(str(f))
+
+    return sorted(found_files)
+
+
+def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare export file data.
+
+    Export files have columns (case-insensitive):
+      - Date           → yyyymm (format: 15-May-25)
+      - product name   → ITEM
+      - quantity       → QTY
+      - unit           → UQC
+      - item rate (inr)→ TOTAL_VALUE
+
+    Returns a clean DataFrame with columns: yyyymm, ITEM, QTY, UQC, TOTAL_VALUE, GRADE_SPEC
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+
+    # Build a lower-cased column lookup for case-insensitive matching
+    col_map = {c.strip().lower(): c for c in df.columns}
+
+    def _find_col(*candidates):
+        for cand in candidates:
+            if cand.lower() in col_map:
+                return col_map[cand.lower()]
+        return None
+
+    date_src = _find_col('date')
+    item_src = _find_col('product name', 'product_name')
+    qty_src = _find_col('quantity', 'qty')
+    unit_src = _find_col('unit', 'uqc')
+    value_src = _find_col('item rate(inr)', 'item rate (inr)', 'item_rate_(inr)', 'item rate inr', 'item_rate_inr', 'rate (inr)', 'rate(inr)')
+
+    if date_src is None:
+        raise ValueError(f"No Date column found in export file. Available columns: {list(df.columns)}")
+
+    # Parse date: format '15-May-25'
+    df['yyyymm'] = pd.to_datetime(df[date_src], format='%d-%b-%y', dayfirst=True, errors='coerce').dt.strftime('%Y%m')
+
+    # Map columns
+    df['ITEM'] = df[item_src] if item_src else ''
+    df['QTY'] = pd.to_numeric(df[qty_src], errors='coerce') if qty_src else np.nan
+    df['UQC'] = df[unit_src] if unit_src else ''
+    df['TOTAL_VALUE'] = pd.to_numeric(df[value_src], errors='coerce') if value_src else np.nan
+
+    # Extract grade spec from product name
+    df['GRADE_SPEC'] = df['ITEM'].apply(llm_extract_grade_spec)
+
+    # Normalize UOM
+    df = llm_normalize_uom(df, 'UQC')
+
+    # Drop rows with missing critical values
+    df = df.dropna(subset=['yyyymm', 'QTY', 'TOTAL_VALUE'])
+
+    return df[['yyyymm', 'ITEM', 'QTY', 'UQC', 'TOTAL_VALUE', 'GRADE_SPEC']].reset_index(drop=True)
+
+
+def calculate_export_avg_price(export_df: pd.DataFrame) -> float:
+    """
+    Calculate the overall weighted average price from export data.
+
+    Returns TOTAL_VALUE.sum() / QTY.sum(), or 0.0 if empty or QTY sum is 0.
+    """
+    if export_df.empty:
+        return 0.0
+    total_qty = export_df['QTY'].sum()
+    if total_qty == 0:
+        return 0.0
+    return float(export_df['TOTAL_VALUE'].sum() / total_qty)
+
+
 def discover_cipla_file(data_dir: str) -> Optional[str]:
     """Discover Cipla GRN file"""
     cipla_patterns = ["cipla_api_grn*.xlsx", "cipla_grn*.xlsx"]

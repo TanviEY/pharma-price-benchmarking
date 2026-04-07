@@ -36,6 +36,7 @@ from backend import (
     run_processing_pipeline,
     format_currency, format_percentage, calculate_price_variance,
     get_grade_spec_options, get_uom_options, get_date_range, filter_dataframe,
+    discover_export_files, prepare_export_data, calculate_export_avg_price,
 )
 
 
@@ -731,6 +732,13 @@ if st.session_state.selected_molecule:
                 _log_lines.append(f'<span class="pi-log-narration">💬 {_narr2}</span>')
             _render_log(_log_lines)
 
+            # ── Step 2b: Discover and load export files (non-blocking) ────────
+            export_files = discover_export_files(selected_mol, "data/raw", MOLECULE_MAPPING)
+            export_df_raw = load_multiple_files(export_files) if export_files else pd.DataFrame()
+            if export_files:
+                _log_lines.append(f'<span class="pi-log-step-ok">  ↳ Export files found: {len(export_files)} file(s)</span>')
+                _render_log(_log_lines)
+
             # ── Step 3: Prepare molecule data ──────────────────────────────────
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 3/8 — Preparing &amp; cleaning molecule data…</span>')
             _render_log(_log_lines)
@@ -745,6 +753,13 @@ if st.session_state.selected_molecule:
             if _narr3:
                 _log_lines.append(f'<span class="pi-log-narration">💬 {_narr3}</span>')
             _render_log(_log_lines)
+
+            # ── Step 3b: Prepare export data ───────────────────────────────────
+            try:
+                export_df = prepare_export_data(export_df_raw) if not export_df_raw.empty else pd.DataFrame()
+            except Exception:
+                export_df = pd.DataFrame()
+            export_avg_price = calculate_export_avg_price(export_df)
 
             # ── Step 4: Prepare Cipla data ─────────────────────────────────────
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 4/8 — Preparing Cipla data…</span>')
@@ -847,6 +862,7 @@ if st.session_state.selected_molecule:
                     "after_clean_count": after_clean_count,
                     "filter_stats": filter_stats,
                     "cipla_baseline": cipla_baseline,
+                    "export_avg_price": export_avg_price,
                 },
                 "data": {
                     "supplier": supplier_agg,
@@ -854,6 +870,7 @@ if st.session_state.selected_molecule:
                     "cipla": cipla_agg,
                     "consolidated": consolidated,
                     "outlier": outlier_df,
+                    "export": export_df,
                 },
             }
             st.session_state.pipeline_clean_time = _clean_time
@@ -875,9 +892,11 @@ if st.session_state.selected_molecule:
 
     consolidated_df = result["data"]["consolidated"]
     outlier_df_cached = result["data"]["outlier"]
+    export_df_cached = result["data"].get("export", pd.DataFrame())
     meta = result["metadata"]
     filter_stats_cached = meta["filter_stats"]
     cipla_baseline_cached = meta["cipla_baseline"]
+    export_avg_price = meta.get("export_avg_price", 0.0)
 
     # Metadata (derived from full consolidated_df)
     mol_cfg = MOLECULE_MAPPING["molecules"].get(selected_mol, {})
@@ -1565,6 +1584,13 @@ if st.session_state.selected_molecule:
             _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
         )
 
+        # Export sparkline — monthly weighted avg from export_df_cached
+        _export_spark_vals = []
+        for _m in months_sorted_all:
+            _edf_m = export_df_cached[export_df_cached["yyyymm"] == _m] if not export_df_cached.empty else pd.DataFrame()
+            _export_spark_vals.append(_safe_wtd_avg(_edf_m["TOTAL_VALUE"], _edf_m["QTY"]) if not _edf_m.empty else 0.0)
+        export_spark = _render_sparkline(_export_spark_vals, "#7c3aed")
+
         # Cost advantage badge
         if cipla_price > 0 and market_price > 0:
             adv_sym = "▼" if cost_adv < 0 else "▲"
@@ -1575,7 +1601,7 @@ if st.session_state.selected_molecule:
 
         st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
         st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
-        k1, k2, k3, k4, k5 = st.columns(5)
+        k1, k2, k_export, k3, k4, k5 = st.columns(6)
 
         with k1:
             st.markdown(f"""
@@ -1591,11 +1617,22 @@ if st.session_state.selected_molecule:
         with k2:
             st.markdown(f"""
             <div class="pi-kpi-card" style="border-top-color:#0891b2;">
-              <div class="pi-kpi-label">EXIM Market Avg</div>
+              <div class="pi-kpi-label">EXIM Market Avg (Import)</div>
               <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
-              <div class="pi-kpi-note">EXIM data</div>
+              <div class="pi-kpi-note">EXIM import data</div>
               {market_spark}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with k_export:
+            st.markdown(f"""
+            <div class="pi-kpi-card" style="border-top-color:#7c3aed;">
+              <div class="pi-kpi-label">EXIM Market Avg (Export)</div>
+              <div class="pi-kpi-value">₹{export_avg_price:,.0f} <span>/{uom}</span></div>
+              <div><span class="pi-kpi-badge" style="background:#f5f3ff;color:#7c3aed;">EXIM export data</span></div>
+              <div class="pi-kpi-note">Weighted avg across period</div>
+              {export_spark}
             </div>
             """, unsafe_allow_html=True)
 
