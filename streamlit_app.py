@@ -36,7 +36,7 @@ from backend import (
     run_processing_pipeline,
     format_currency, format_percentage, calculate_price_variance,
     get_grade_spec_options, get_uom_options, get_date_range, filter_dataframe,
-    discover_export_files, prepare_export_data, calculate_export_avg_price,
+    discover_export_files, prepare_export_data,
 )
 
 
@@ -760,7 +760,6 @@ if st.session_state.selected_molecule:
             except Exception as _exp_exc:
                 _log_lines.append(f'<span class="pi-log-step-warn">  ↳ Export data skipped — {_exp_exc}</span>')
                 export_df = pd.DataFrame()
-            export_avg_price = calculate_export_avg_price(export_df)
 
             # ── Step 4: Prepare Cipla data ─────────────────────────────────────
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 4/8 — Preparing Cipla data…</span>')
@@ -863,7 +862,6 @@ if st.session_state.selected_molecule:
                     "after_clean_count": after_clean_count,
                     "filter_stats": filter_stats,
                     "cipla_baseline": cipla_baseline,
-                    "export_avg_price": export_avg_price,
                 },
                 "data": {
                     "supplier": supplier_agg,
@@ -897,7 +895,6 @@ if st.session_state.selected_molecule:
     meta = result["metadata"]
     filter_stats_cached = meta["filter_stats"]
     cipla_baseline_cached = meta["cipla_baseline"]
-    export_avg_price = meta.get("export_avg_price", 0.0)
 
     # Metadata (derived from full consolidated_df)
     mol_cfg = MOLECULE_MAPPING["molecules"].get(selected_mol, {})
@@ -1585,10 +1582,22 @@ if st.session_state.selected_molecule:
             _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
         )
 
-        # Export sparkline — monthly weighted avg from export_df_cached
+        # Export sparkline — monthly weighted avg from export_df_cached with active filters
         if not export_df_cached.empty:
+            _export_mask = (
+                (export_df_cached["UQC"].isin(_f_uoms))
+                & (export_df_cached["GRADE_SPEC"].isin(_f_grades))
+            )
+            if _f_from_yyyymm and _f_to_yyyymm:
+                _export_mask = (
+                    _export_mask
+                    & (export_df_cached["yyyymm"] >= _f_from_yyyymm)
+                    & (export_df_cached["yyyymm"] <= _f_to_yyyymm)
+                )
+            _export_filtered = export_df_cached[_export_mask]
+            export_avg_price = _safe_wtd_avg(_export_filtered["TOTAL_VALUE"], _export_filtered["QTY"])
             _export_by_month = {
-                m: grp for m, grp in export_df_cached.groupby("yyyymm")
+                m: grp for m, grp in _export_filtered.groupby("yyyymm")
             }
             _export_spark_vals = [
                 _safe_wtd_avg(_export_by_month[_m]["TOTAL_VALUE"], _export_by_month[_m]["QTY"])
@@ -1596,6 +1605,7 @@ if st.session_state.selected_molecule:
                 for _m in months_sorted_all
             ]
         else:
+            export_avg_price = 0.0
             _export_spark_vals = [0.0] * len(months_sorted_all)
         export_spark = _render_sparkline(_export_spark_vals, "#7c3aed")
 
