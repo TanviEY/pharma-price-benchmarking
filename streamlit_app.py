@@ -757,7 +757,8 @@ if st.session_state.selected_molecule:
             # ── Step 3b: Prepare export data ───────────────────────────────────
             try:
                 export_df = prepare_export_data(export_df_raw) if not export_df_raw.empty else pd.DataFrame()
-            except Exception:
+            except Exception as _exp_exc:
+                _log_lines.append(f'<span class="pi-log-step-warn">  ↳ Export data skipped — {_exp_exc}</span>')
                 export_df = pd.DataFrame()
             export_avg_price = calculate_export_avg_price(export_df)
 
@@ -1585,10 +1586,17 @@ if st.session_state.selected_molecule:
         )
 
         # Export sparkline — monthly weighted avg from export_df_cached
-        _export_spark_vals = []
-        for _m in months_sorted_all:
-            _edf_m = export_df_cached[export_df_cached["yyyymm"] == _m] if not export_df_cached.empty else pd.DataFrame()
-            _export_spark_vals.append(_safe_wtd_avg(_edf_m["TOTAL_VALUE"], _edf_m["QTY"]) if not _edf_m.empty else 0.0)
+        if not export_df_cached.empty:
+            _export_by_month = {
+                m: grp for m, grp in export_df_cached.groupby("yyyymm")
+            }
+            _export_spark_vals = [
+                _safe_wtd_avg(_export_by_month[_m]["TOTAL_VALUE"], _export_by_month[_m]["QTY"])
+                if _m in _export_by_month else 0.0
+                for _m in months_sorted_all
+            ]
+        else:
+            _export_spark_vals = [0.0] * len(months_sorted_all)
         export_spark = _render_sparkline(_export_spark_vals, "#7c3aed")
 
         # Cost advantage badge
