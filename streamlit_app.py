@@ -899,6 +899,8 @@ if st.session_state.selected_molecule:
     # Metadata (derived from full consolidated_df)
     mol_cfg = MOLECULE_MAPPING["molecules"].get(selected_mol, {})
     cas_code = mol_cfg.get("cipla_api_filter", selected_mol.upper())
+    import_duty_pct = mol_cfg.get("import_duty_pct", 0)
+    import_duty_mult = 1 + import_duty_pct / 100
     uom = consolidated_df["uom"].mode()[0] if len(consolidated_df) > 0 else "KG"
     grade_series = consolidated_df[consolidated_df["source"] == "Cipla"]["GRADE_SPEC"]
     grade = grade_series.mode()[0] if len(grade_series) > 0 else "USP"
@@ -1536,11 +1538,11 @@ if st.session_state.selected_molecule:
         # SECTION 1 — 5 KPI Cards with Sparklines
         # ─────────────────────────────────────────────────────────────────────────
         cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
-        market_df_f = filtered_df[filtered_df["source"] != "Cipla"]
+        market_df_f = filtered_df[filtered_df["source"] == "Buyer"]
         buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
 
         cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
-        market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"])
+        market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"]) * import_duty_mult
         cipla_n_records = len(cipla_df_f)
         cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
         market_n_ent = market_df_f["entity_name"].nunique()
@@ -1558,8 +1560,8 @@ if st.session_state.selected_molecule:
             if len(ent_prices) > 0:
                 min_row = ent_prices.loc[ent_prices["wtd_price"].idxmin()]
                 max_row = ent_prices.loc[ent_prices["wtd_price"].idxmax()]
-                low_price, low_ent = min_row["wtd_price"], min_row["entity_name"]
-                high_price, high_ent = max_row["wtd_price"], max_row["entity_name"]
+                low_price, low_ent = min_row["wtd_price"] * import_duty_mult, min_row["entity_name"]
+                high_price, high_ent = max_row["wtd_price"] * import_duty_mult, max_row["entity_name"]
 
         cost_adv = cipla_price - market_price if market_price > 0 else 0.0
         cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
@@ -1579,7 +1581,7 @@ if st.session_state.selected_molecule:
             _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
         )
         market_spark = _render_sparkline(
-            _monthly_wtd(lambda d: d[d["source"] != "Cipla"], months_sorted_all), "#0891b2"
+            _monthly_wtd(lambda d: d[d["source"] == "Buyer"], months_sorted_all), "#0891b2"
         )
 
         # Export sparkline — monthly weighted avg from export_df_cached with active filters
@@ -1638,7 +1640,7 @@ if st.session_state.selected_molecule:
               <div class="pi-kpi-label">EXIM Market Avg (Import)</div>
               <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
-              <div class="pi-kpi-note">EXIM import data</div>
+              <div class="pi-kpi-note">EXIM import data · incl. {import_duty_pct}% duty</div>
               {market_spark}
             </div>
             """, unsafe_allow_html=True)
@@ -1673,7 +1675,7 @@ if st.session_state.selected_molecule:
               <div class="pi-kpi-label">Lowest Competitor</div>
               <div class="pi-kpi-value">₹{low_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#fffbeb;color:#d97706;">{low_ent[:22] if low_ent != "—" else "—"}</span></div>
-              <div class="pi-kpi-note">period avg</div>
+              <div class="pi-kpi-note">period avg · incl. {import_duty_pct}% duty</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1683,7 +1685,7 @@ if st.session_state.selected_molecule:
               <div class="pi-kpi-label">Highest Competitor</div>
               <div class="pi-kpi-value">₹{high_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#fff1f2;color:#dc2626;">{high_ent[:22] if high_ent != "—" else "—"}</span></div>
-              <div class="pi-kpi-note">premium grade</div>
+              <div class="pi-kpi-note">premium grade · incl. {import_duty_pct}% duty</div>
             </div>
             """, unsafe_allow_html=True)
 
