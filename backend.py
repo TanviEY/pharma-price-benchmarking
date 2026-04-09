@@ -21,7 +21,7 @@ try:
     _GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     if _GEMINI_API_KEY:
         genai.configure(api_key=_GEMINI_API_KEY)
-        _gemini_model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+        _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
         _GEMINI_AVAILABLE = True
     else:
         _GEMINI_AVAILABLE = False
@@ -198,7 +198,7 @@ def llm_extract_grade_spec(item_text: str) -> str:
 _item_relevance_cache: Dict[Tuple[str, str], dict] = {}
 
 
-def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
+def llm_check_item_relevance(molecule: str, item_value: str, cipla_form: str = "") -> dict:
     """
     Use Gemini to determine if item_value is a direct pharmaceutical form of molecule.
     Returns a dict: {"is_relevant": bool, "outlier_flag": bool, "outlier_reason": str}
@@ -206,13 +206,15 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
     If Gemini is unavailable or the response cannot be parsed, the item is treated as
     relevant (safe pass-through) to avoid false-positive outlier flags.
     Results are cached per (molecule, item_value) pair to avoid redundant LLM calls.
+    cipla_form: the exact pharmaceutical form used in Cipla GRN (e.g. "AZITHROMYCIN DIHYDRATE"),
+    included in the prompt so the LLM understands which specific salt/hydrate is expected.
     """
     _relevant = {"is_relevant": True, "outlier_flag": False, "outlier_reason": ""}
 
     if not isinstance(item_value, str) or not item_value.strip():
         return _relevant
 
-    cache_key = (molecule.lower().strip(), item_value.strip())
+    cache_key = (molecule.lower().strip(), item_value.strip().lower())
     if cache_key in _item_relevance_cache:
         return _item_relevance_cache[cache_key]
 
@@ -221,9 +223,14 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
         return _relevant
 
     try:
+        _form_hint = (
+            f' (expected pharmaceutical form: "{cipla_form}")'
+            if cipla_form and cipla_form.upper() != molecule.upper()
+            else ""
+        )
         prompt = (
             f'You are a pharmaceutical expert analyzing import/export trade data.\n'
-            f'Molecule of interest: "{molecule}"\n'
+            f'Molecule of interest: "{molecule}"{_form_hint}\n'
             f'Item description in the dataset: "{item_value}"\n\n'
             f'Determine if this item directly represents "{molecule}" as an active pharmaceutical '
             f'ingredient (API), its salt, hydrate, ester, polymorph, co-crystal, or finished dosage form.\n\n'
@@ -239,7 +246,7 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
             f'"outlier_reason": "<one sentence, empty string if relevant>"}}'
         )
         response = _gemini_model.generate_content(prompt)
-        json_match = re.search(r'\{[^{}]*\}', response.text, re.DOTALL)
+        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
         if json_match:
             parsed = json.loads(json_match.group())
             result = {
@@ -269,10 +276,12 @@ def llm_filter_item_relevance(
     if df.empty or item_col not in df.columns:
         return df, pd.DataFrame()
 
+    cipla_form = MOLECULE_MAPPING.get('molecules', {}).get(molecule_name, {}).get('cipla_api_filter', '')
+
     unique_items = df[item_col].dropna().unique()
     item_relevance: Dict[str, dict] = {}
     for item_val in unique_items:
-        item_relevance[item_val] = llm_check_item_relevance(molecule_name, str(item_val))
+        item_relevance[item_val] = llm_check_item_relevance(molecule_name, str(item_val), cipla_form)
 
     def _is_outlier(item_val):
         if pd.isna(item_val):
@@ -290,6 +299,7 @@ def llm_filter_item_relevance(
         item_outlier_df['outlier_reason_text'] = item_outlier_df['outlier_reason_item']
         item_outlier_df['outlier_reason_qty'] = False
         item_outlier_df['outlier_reason_price'] = False
+        item_outlier_df['unit_price'] = item_outlier_df['TOTAL_VALUE'] / item_outlier_df['QTY']
 
     return relevant_df, item_outlier_df
 
@@ -364,15 +374,19 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
     original_df = df.copy()
     original_count = len(df)
 
-    # Filter 1: Quantity threshold
+    # Filter 1: Quantity threshold (read from config, default 10%)
+    _settings = MOLECULE_MAPPING.get('settings', {})
+    qty_threshold = _settings.get('outlier_qty_threshold', 0.10)
+    price_variance = _settings.get('outlier_price_variance', 0.30)
+
     exim_avg_qty = df['QTY'].mean()
-    min_qty = exim_avg_qty * 0.10
+    min_qty = exim_avg_qty * qty_threshold
     df = df[df['QTY'] >= min_qty]
 
-    # Filter 2: Price variance
+    # Filter 2: Price variance (read from config, default ±30%)
     cipla_price = cipla_baseline['avg_price']
-    price_lower = cipla_price * 0.70  # -30%
-    price_upper = cipla_price * 1.30  # +30%
+    price_lower = cipla_price * (1 - price_variance)
+    price_upper = cipla_price * (1 + price_variance)
 
     # Calculate per-unit price
     df['unit_price'] = df['TOTAL_VALUE'] / df['QTY']
@@ -520,9 +534,10 @@ def prepare_cipla_data(df: pd.DataFrame) -> pd.DataFrame:
 
 def calculate_cipla_baseline(cipla_df: pd.DataFrame) -> Dict:
     """Calculate baseline metrics from Cipla data"""
+    total_qty = cipla_df['quantity'].sum()
     return {
         'avg_qty': cipla_df['quantity'].mean(),
-        'avg_price': (cipla_df['actual_spend_inr'] / cipla_df['quantity']).mean(),
+        'avg_price': cipla_df['actual_spend_inr'].sum() / total_qty if total_qty > 0 else 0.0,
         'min_qty': cipla_df['quantity'].min(),
         'max_qty': cipla_df['quantity'].max(),
         'total_records': len(cipla_df)

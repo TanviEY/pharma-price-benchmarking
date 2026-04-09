@@ -33,7 +33,7 @@ from backend import (
     calculate_cipla_baseline, aggregate_supplier, aggregate_buyer, aggregate_cipla,
     discover_molecule_files, discover_cipla_file, get_available_molecules, get_molecule_file_info,
     match_molecule_input, get_suggestions, get_top_match, get_aliases,
-    run_processing_pipeline,
+    run_processing_pipeline, llm_filter_item_relevance,
     format_currency, format_percentage, calculate_price_variance,
     get_grade_spec_options, get_uom_options, get_date_range, filter_dataframe,
     discover_export_files, prepare_export_data,
@@ -758,7 +758,23 @@ if st.session_state.selected_molecule:
                 _log_lines.append(f'<span class="pi-log-narration">💬 {_narr3}</span>')
             _render_log(_log_lines)
 
-            # ── Step 3b: Prepare export data ───────────────────────────────────
+            # ── Step 3b: LLM item relevance check ─────────────────────────────
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 3b/8 — Checking item relevance with LLM…</span>')
+            _render_log(_log_lines)
+            _item_col = next(
+                (c for c in ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT'] if c in molecule_df.columns),
+                None,
+            )
+            item_outlier_df = pd.DataFrame()
+            if _item_col:
+                molecule_df, item_outlier_df = llm_filter_item_relevance(molecule_df, selected_mol, _item_col)
+                _s3b_result = f"{len(item_outlier_df)} item-irrelevant rows flagged, {len(molecule_df)} remaining"
+            else:
+                _s3b_result = "No item column found — step skipped"
+            _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 3b done — {_s3b_result}</span>')
+            _render_log(_log_lines)
+
+            # ── Step 3c: Prepare export data ───────────────────────────────────
             try:
                 export_df = prepare_export_data(export_df_raw) if not export_df_raw.empty else pd.DataFrame()
             except Exception as _exp_exc:
@@ -795,6 +811,10 @@ if st.session_state.selected_molecule:
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 6/8 — Applying outlier filters (qty threshold + price ±30%)…</span>')
             _render_log(_log_lines)
             molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
+            # Merge item-irrelevant outliers into the main outlier dataframe
+            if len(item_outlier_df) > 0:
+                outlier_df = pd.concat([item_outlier_df, outlier_df], ignore_index=True)
+            filter_stats['item_outlier_count'] = len(item_outlier_df)
             _removed = filter_stats["removed_count"]
             _pct = filter_stats["removal_percentage"]
             _s6_result = f"{_removed} outlier rows removed ({_pct:.1f}%), {filter_stats['filtered_count']} rows kept"
@@ -942,6 +962,8 @@ if st.session_state.selected_molecule:
 
             def _outlier_reason(row):
                 reasons = []
+                if row.get("outlier_reason_item"):
+                    reasons.append(f"Non-relevant item: {row['outlier_reason_item']}")
                 if row.get("outlier_reason_qty", False):
                     reasons.append(f"Low Quantity (QTY < {_min_qty_thr:.0f})")
                 if row.get("outlier_reason_price", False):
