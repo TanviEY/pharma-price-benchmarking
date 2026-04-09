@@ -80,6 +80,9 @@ def load_multiple_files(file_list: list) -> pd.DataFrame:
 
 # ── Data Processing ────────────────────────────────────────────────────────────
 
+# Candidate column names (in priority order) used to locate the item/product description column.
+_ITEM_COL_CANDIDATES = ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT']
+
 _UOM_CANONICAL_MAP = {
     "KGS": "KG",
     "GMS": "GM",
@@ -279,14 +282,17 @@ def llm_filter_item_relevance(
     cipla_form = MOLECULE_MAPPING.get('molecules', {}).get(molecule_name, {}).get('cipla_api_filter', '')
 
     unique_items = df[item_col].dropna().unique()
+    # Use lowercase keys so lookups are case-insensitive, matching the LLM cache key normalisation.
     item_relevance: Dict[str, dict] = {}
     for item_val in unique_items:
-        item_relevance[item_val] = llm_check_item_relevance(molecule_name, str(item_val), cipla_form)
+        item_relevance[str(item_val).strip().lower()] = llm_check_item_relevance(
+            molecule_name, str(item_val), cipla_form
+        )
 
     def _is_outlier(item_val):
         if pd.isna(item_val):
             return False
-        return item_relevance.get(item_val, {}).get("outlier_flag", False)
+        return item_relevance.get(str(item_val).strip().lower(), {}).get("outlier_flag", False)
 
     outlier_mask = df[item_col].apply(_is_outlier)
     relevant_df = df[~outlier_mask].copy()
@@ -294,12 +300,12 @@ def llm_filter_item_relevance(
 
     if len(item_outlier_df) > 0:
         item_outlier_df['outlier_reason_item'] = item_outlier_df[item_col].apply(
-            lambda v: item_relevance.get(v, {}).get("outlier_reason", "") if not pd.isna(v) else ""
+            lambda v: item_relevance.get(str(v).strip().lower(), {}).get("outlier_reason", "") if not pd.isna(v) else ""
         )
         item_outlier_df['outlier_reason_text'] = item_outlier_df['outlier_reason_item']
         item_outlier_df['outlier_reason_qty'] = False
         item_outlier_df['outlier_reason_price'] = False
-        item_outlier_df['unit_price'] = item_outlier_df['TOTAL_VALUE'] / item_outlier_df['QTY']
+        item_outlier_df['unit_price'] = item_outlier_df['TOTAL_VALUE'] / item_outlier_df['QTY'].replace(0, np.nan)
 
     return relevant_df, item_outlier_df
 
@@ -388,8 +394,8 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
     price_lower = cipla_price * (1 - price_variance)
     price_upper = cipla_price * (1 + price_variance)
 
-    # Calculate per-unit price
-    df['unit_price'] = df['TOTAL_VALUE'] / df['QTY']
+    # Calculate per-unit price (guard against zero QTY to avoid division by zero)
+    df['unit_price'] = df['TOTAL_VALUE'] / df['QTY'].replace(0, np.nan)
     df = df[(df['unit_price'] >= price_lower) & (df['unit_price'] <= price_upper)]
 
     filtered_count = len(df)
@@ -397,8 +403,8 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
 
     # Build outlier df: rows in original that are NOT in filtered
     outlier_df = original_df[~original_df.index.isin(df.index)].copy()
-    # Add reason columns for validation
-    outlier_df['unit_price'] = outlier_df['TOTAL_VALUE'] / outlier_df['QTY']
+    # Add reason columns for validation (guard against zero QTY)
+    outlier_df['unit_price'] = outlier_df['TOTAL_VALUE'] / outlier_df['QTY'].replace(0, np.nan)
     outlier_df['outlier_reason_qty'] = outlier_df['QTY'] < min_qty
     outlier_df['outlier_reason_price'] = ~((outlier_df['unit_price'] >= price_lower) & (outlier_df['unit_price'] <= price_upper))
 
@@ -486,7 +492,7 @@ def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # Find item/description column for grade spec
     item_col = None
-    for col in ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT']:
+    for col in _ITEM_COL_CANDIDATES:
         if col in df.columns:
             item_col = col
             break
@@ -940,7 +946,7 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
 
         # Step 3b: Filter item-irrelevant rows (LLM item relevance check)
         item_col = next(
-            (c for c in ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT'] if c in molecule_df.columns),
+            (c for c in _ITEM_COL_CANDIDATES if c in molecule_df.columns),
             None,
         )
         if item_col:

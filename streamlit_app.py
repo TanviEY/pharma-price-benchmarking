@@ -26,7 +26,7 @@ except Exception:
     _gemini_model = None
 
 from backend import (
-    MOLECULE_MAPPING,
+    MOLECULE_MAPPING, _ITEM_COL_CANDIDATES,
     load_cipla_grn, load_multiple_files,
     extract_grade_spec, extract_yyyymm,
     apply_outlier_filters, prepare_molecule_data, prepare_cipla_data,
@@ -762,7 +762,7 @@ if st.session_state.selected_molecule:
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 3b/8 — Checking item relevance with LLM…</span>')
             _render_log(_log_lines)
             _item_col = next(
-                (c for c in ['ITEM', 'item', 'ITEM_DESC', 'DESCRIPTION', 'PRODUCT'] if c in molecule_df.columns),
+                (c for c in _ITEM_COL_CANDIDATES if c in molecule_df.columns),
                 None,
             )
             item_outlier_df = pd.DataFrame()
