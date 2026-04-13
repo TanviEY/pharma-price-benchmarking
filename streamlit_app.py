@@ -9,27 +9,13 @@ import plotly.graph_objects as go
 import numpy as np
 from pathlib import Path
 
-try:
-    import google.generativeai as genai
-    _GEMINI_API_KEY = (
-        st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None
-    ) or os.environ.get("GEMINI_API_KEY")
-    if _GEMINI_API_KEY:
-        genai.configure(api_key=_GEMINI_API_KEY)
-        _gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-        _GEMINI_AVAILABLE = True
-    else:
-        _GEMINI_AVAILABLE = False
-        _gemini_model = None
-except Exception:
-    _GEMINI_AVAILABLE = False
-    _gemini_model = None
+# LLM is handled entirely by backend (Gemini → OpenAI fallback)
 
 from backend import (
     MOLECULE_MAPPING,
     load_cipla_grn, load_multiple_files,
     extract_grade_spec, extract_yyyymm,
-    apply_outlier_filters, prepare_molecule_data, prepare_cipla_data,
+    apply_outlier_filters, prepare_molecule_data, prepare_cipla_data, llm_filter_item_relevance,
     calculate_cipla_baseline, aggregate_supplier, aggregate_buyer, aggregate_cipla,
     discover_molecule_files, discover_cipla_file, get_available_molecules, get_molecule_file_info,
     match_molecule_input, get_suggestions, get_top_match, get_aliases,
@@ -37,6 +23,7 @@ from backend import (
     format_currency, format_percentage, calculate_price_variance,
     get_grade_spec_options, get_uom_options, get_date_range, filter_dataframe,
     discover_export_files, prepare_export_data,
+    _llm_generate, _LLM_AVAILABLE, _LLM_PROVIDER,
 )
 
 
@@ -80,31 +67,23 @@ def fmt_qty(value: float) -> str:
 
 
 def _gemini_narrate(step_description: str, step_result_summary: str) -> str:
-    """Call Gemini to narrate a pipeline step. Returns empty string on failure."""
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    """Narrate a pipeline step using the active LLM. Returns '' on failure."""
+    if not _LLM_AVAILABLE:
         return ""
-    try:
-        prompt = (
-            "You are a data processing agent. Narrate this step in ONE sentence "
-            "(max 20 words), present tense, no technical jargon:\n"
-            f"Step: {step_description}\n"
-            f"Result: {step_result_summary}"
-        )
-        response = _gemini_model.generate_content(prompt)
-        return response.text.strip()
-    except Exception:
-        return ""
+    prompt = (
+        "You are a data processing agent. Narrate this step in ONE sentence "
+        "(max 20 words), present tense, no technical jargon:\n"
+        f"Step: {step_description}\n"
+        f"Result: {step_result_summary}"
+    )
+    return _llm_generate(prompt)
 
 
 def _llm_analysis(prompt: str) -> str:
-    """Call Gemini with a prompt and return the response text. Returns '' on failure."""
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    """Call the active LLM with a prompt and return the response text. Returns '' on failure."""
+    if not _LLM_AVAILABLE:
         return ""
-    try:
-        response = _gemini_model.generate_content(prompt)
-        return response.text.strip()
-    except Exception:
-        return ""
+    return _llm_generate(prompt)
 
 
 AVATAR_COLORS = [
@@ -561,8 +540,6 @@ for _k, _v in [
     ("cipla_table_page", 1),
     ("exim_table_page", 1),
     ("bargain_page", 1),
-    ("cipla_from_month", None),
-    ("cipla_to_month", None),
     ("filter_from_month", None),
     ("filter_to_month", None),
     ("filter_uoms", None),
@@ -765,6 +742,23 @@ if st.session_state.selected_molecule:
                 _log_lines.append(f'<span class="pi-log-step-warn">  ↳ Export data skipped — {_exp_exc}</span>')
                 export_df = pd.DataFrame()
 
+            # ── Step 3c: LLM item-relevance filter ────────────────────────────
+            _item_col = next(
+                (c for c in ["ITEM", "item", "ITEM_DESC", "DESCRIPTION", "PRODUCT"] if c in molecule_df.columns),
+                None,
+            )
+            if _item_col and _LLM_AVAILABLE:
+                _log_lines.append('<span class="pi-log-step-ok">▶ Step 3c — LLM item-relevance check…</span>')
+                _render_log(_log_lines)
+                molecule_df, _item_outlier_df = llm_filter_item_relevance(molecule_df, selected_mol, _item_col)
+                _item_removed = len(_item_outlier_df)
+                _log_lines.append(
+                    f'<span class="pi-log-step-ok">✔ Step 3c done — {_item_removed} item-irrelevant rows flagged as outliers</span>'
+                )
+                _render_log(_log_lines)
+            else:
+                _item_outlier_df = pd.DataFrame()
+
             # ── Step 4: Prepare Cipla data ─────────────────────────────────────
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 4/8 — Preparing Cipla data…</span>')
             _render_log(_log_lines)
@@ -795,6 +789,9 @@ if st.session_state.selected_molecule:
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 6/8 — Applying outlier filters (qty threshold + price ±30%)…</span>')
             _render_log(_log_lines)
             molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
+            # Merge LLM item-relevance outliers into the outlier table
+            if len(_item_outlier_df) > 0:
+                outlier_df = pd.concat([_item_outlier_df, outlier_df], ignore_index=True)
             _removed = filter_stats["removed_count"]
             _pct = filter_stats["removal_percentage"]
             _s6_result = f"{_removed} outlier rows removed ({_pct:.1f}%), {filter_stats['filtered_count']} rows kept"
@@ -838,13 +835,25 @@ if st.session_state.selected_molecule:
                 [supplier_agg[shared_cols], buyer_agg[shared_cols], cipla_agg[shared_cols]],
                 ignore_index=True,
             )
-            # Save processed files
+            # Save processed files (non-blocking — warn if a file is locked e.g. open in Excel)
             _proc_dir = Path("data/processed")
             _proc_dir.mkdir(parents=True, exist_ok=True)
-            supplier_agg.to_csv(_proc_dir / f"{selected_mol}_supplier.csv", index=False)
-            buyer_agg.to_csv(_proc_dir / f"{selected_mol}_buyer.csv", index=False)
-            cipla_agg.to_csv(_proc_dir / f"cipla_{selected_mol}.csv", index=False)
-            outlier_df.to_csv(_proc_dir / f"outlier_{selected_mol}.csv", index=False)
+            _save_errors = []
+            for _fname, _df in [
+                (f"{selected_mol}_supplier.csv", supplier_agg),
+                (f"{selected_mol}_buyer.csv", buyer_agg),
+                (f"cipla_{selected_mol}.csv", cipla_agg),
+                (f"outlier_{selected_mol}.csv", outlier_df),
+            ]:
+                try:
+                    _df.to_csv(_proc_dir / _fname, index=False)
+                except PermissionError:
+                    _save_errors.append(_fname)
+            if _save_errors:
+                _log_lines.append(
+                    f'<span class="pi-log-step-warn">⚠ Could not save {len(_save_errors)} file(s) — '
+                    f'close them in Excel and re-run if needed: {", ".join(_save_errors)}</span>'
+                )
 
             _t1 = time.time()
             _clean_time = _t1 - _t0
@@ -946,6 +955,8 @@ if st.session_state.selected_molecule:
                     reasons.append(f"Low Quantity (QTY < {_min_qty_thr:.0f})")
                 if row.get("outlier_reason_price", False):
                     reasons.append(f"Price Out of Range (₹{_price_lower:.0f}–₹{_price_upper:.0f})")
+                if row.get("outlier_reason_item"):
+                    reasons.append(f"Irrelevant Item: {row['outlier_reason_item']}")
                 return " | ".join(reasons) if reasons else "Unknown"
 
             outlier_display = outlier_df_cached.copy()
@@ -963,6 +974,11 @@ if st.session_state.selected_molecule:
                 _disp_cols[_ent_col] = "Supplier / Importer"
             if "yyyymm" in outlier_display.columns:
                 _disp_cols["yyyymm"] = "Date (yyyymm)"
+            # Show item description for item-relevance outliers
+            for _icol in ["ITEM", "item", "ITEM_DESC", "DESCRIPTION", "PRODUCT"]:
+                if _icol in outlier_display.columns:
+                    _disp_cols[_icol] = "Item Description"
+                    break
             if "QTY" in outlier_display.columns:
                 _disp_cols["QTY"] = "QTY"
             if "unit_price" in outlier_display.columns:
@@ -973,10 +989,28 @@ if st.session_state.selected_molecule:
             _show_df = (
                 outlier_display[_show_cols]
                 .rename(columns=_disp_cols)
-                .reset_index(drop=False)
-                .rename(columns={"index": "Row Index"})
+                .reset_index(drop=True)
             )
-            st.dataframe(_show_df, use_container_width=True, hide_index=True)
+
+            # Build per-column config so wide columns (Reason, Item, Supplier) get
+            # enough space and text is never clipped.
+            _col_cfg = {}
+            for _col_label in _show_df.columns:
+                if _col_label in ("Supplier / Importer", "Item Description"):
+                    _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="large")
+                elif _col_label == "Reason":
+                    _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="large")
+                elif _col_label in ("QTY", "Unit Price (₹)", "Date (yyyymm)"):
+                    _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="small")
+
+            _tbl_height = min(400, 35 + len(_show_df) * 35)
+            st.dataframe(
+                _show_df,
+                use_container_width=True,
+                hide_index=True,
+                height=_tbl_height,
+                column_config=_col_cfg,
+            )
         else:
             st.success("✅ No outliers detected.")
 
@@ -2362,49 +2396,8 @@ if st.session_state.selected_molecule:
         t4_l, t4_r = st.columns(2)
 
         with t4_l:
-            # Cipla Monthly table — uses full Cipla data (before global month filter)
-            cipla_full_df = consolidated_df[consolidated_df["source"] == "Cipla"]
-            cipla_all_months = sorted(cipla_full_df["yyyymm"].unique())
-
-            # Independent From/To month filter
-            cipla_month_labels = [yyyymm_to_label(m) for m in cipla_all_months]
-            cipla_month_label_to_yyyymm = {yyyymm_to_label(m): m for m in cipla_all_months}
-
-            from_default = st.session_state.get("cipla_from_month") or (cipla_month_labels[0] if cipla_month_labels else None)
-            to_default = st.session_state.get("cipla_to_month") or (cipla_month_labels[-1] if cipla_month_labels else None)
-            if from_default not in cipla_month_labels and cipla_month_labels:
-                from_default = cipla_month_labels[0]
-            if to_default not in cipla_month_labels and cipla_month_labels:
-                to_default = cipla_month_labels[-1]
-
-            cf1, cf2 = st.columns(2)
-            with cf1:
-                from_sel = st.selectbox(
-                    "From month",
-                    cipla_month_labels,
-                    index=cipla_month_labels.index(from_default) if from_default in cipla_month_labels else 0,
-                    key="cipla_from_sel",
-                )
-            with cf2:
-                to_sel = st.selectbox(
-                    "To month",
-                    cipla_month_labels,
-                    index=cipla_month_labels.index(to_default) if to_default in cipla_month_labels else max(0, len(cipla_month_labels) - 1),
-                    key="cipla_to_sel",
-                )
-
-            if from_sel != st.session_state.get("cipla_from_month") or to_sel != st.session_state.get("cipla_to_month"):
-                st.session_state["cipla_from_month"] = from_sel
-                st.session_state["cipla_to_month"] = to_sel
-                st.session_state["cipla_table_page"] = 1
-                st.rerun()
-
-            from_yyyymm = cipla_month_label_to_yyyymm.get(from_sel, cipla_all_months[0] if cipla_all_months else "")
-            to_yyyymm = cipla_month_label_to_yyyymm.get(to_sel, cipla_all_months[-1] if cipla_all_months else "")
-
-            cipla_filtered_full = cipla_full_df[
-                (cipla_full_df["yyyymm"] >= from_yyyymm) & (cipla_full_df["yyyymm"] <= to_yyyymm)
-            ]
+            # Cipla Monthly table — driven by main top-level filters
+            cipla_filtered_full = filtered_df[filtered_df["source"] == "Cipla"]
 
             cipla_sorted = cipla_filtered_full.sort_values("yyyymm").reset_index(drop=True)
 
@@ -2455,7 +2448,7 @@ if st.session_state.selected_molecule:
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
     <div>
     <div class="pi-section-title">Cipla — Monthly Price &amp; Volume</div>
-    <div class="pi-section-sub">api = {selected_mol.upper()} · {from_sel} to {to_sel} · per grade &amp; UOM · Sum QTY · Avg PRICE</div>
+    <div class="pi-section-sub">api = {selected_mol.upper()} · {month_context} · per grade &amp; UOM · Sum QTY · Avg PRICE</div>
     </div>
     <span class="badge badge-blue">ERP</span>
     </div>

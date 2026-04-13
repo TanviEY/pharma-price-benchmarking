@@ -6,6 +6,7 @@ import glob
 import fnmatch
 import re
 import warnings
+import requests
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -14,23 +15,104 @@ from typing import Dict, List, Optional, Tuple
 
 warnings.filterwarnings('ignore')
 
-# ── Gemini LLM ─────────────────────────────────────────────────────────────────
 
+def _load_local_env_file() -> None:
+    """Load key=value pairs from a .env file in the project root into os.environ."""
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and value and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        pass
+
+
+_load_local_env_file()
+
+
+# ── LLM provider: OpenAI (SSL-disabled for corporate/Zscaler networks) ────────
+#  Add OPENAI_API_KEY to your .env to enable AI features.
+
+
+class NoSSLOpenAIClient:
+    """OpenAI client with SSL verification disabled for corporate proxy environments."""
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+    def chat_completion(self, messages, model="gpt-4o-mini", max_tokens=1000, temperature=0.1):
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=self.headers,
+                json=payload,
+                verify=False,
+                timeout=60,
+            )
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 401:
+                raise Exception("Invalid API key. Please check your environment variables.")
+            elif response.status_code == 429:
+                raise Exception("Rate limit exceeded or insufficient credits in OpenAI account.")
+            else:
+                raise Exception(f"OpenAI API error: {response.status_code} - {response.text}")
+        except requests.exceptions.RequestException as exc:
+            raise Exception(f"Request failed: {exc}")
+
+
+_OPENAI_CLIENT = None
+_OPENAI_AVAILABLE = False
 try:
-    import google.generativeai as genai
-    _GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    if _GEMINI_API_KEY:
-        genai.configure(api_key=_GEMINI_API_KEY)
-        _gemini_model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
-        _GEMINI_AVAILABLE = True
-    else:
-        _GEMINI_AVAILABLE = False
-        _gemini_model = None
-        _GEMINI_INIT_ERROR = "No API key found"
-except Exception as e:
-    _GEMINI_AVAILABLE = False
-    _gemini_model = None
-    _GEMINI_INIT_ERROR = str(e)
+    _OPENAI_API_KEY = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if _OPENAI_API_KEY:
+        _OPENAI_CLIENT = NoSSLOpenAIClient(_OPENAI_API_KEY)
+        _OPENAI_AVAILABLE = True
+except Exception:
+    pass
+
+_LLM_AVAILABLE = _OPENAI_AVAILABLE
+_LLM_PROVIDER = "openai" if _OPENAI_AVAILABLE else "none"
+_LLM_INIT_ERROR = (
+    "" if _LLM_AVAILABLE
+    else "No LLM available. Set OPENAI_API_KEY in your .env file."
+)
+
+
+def _llm_generate(prompt: str) -> str:
+    """
+    Send a prompt to OpenAI and return the text response.
+    Returns '' if the client is unavailable or the call fails.
+    """
+    if _OPENAI_AVAILABLE and _OPENAI_CLIENT is not None:
+        try:
+            result = _OPENAI_CLIENT.chat_completion(
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return result["choices"][0]["message"]["content"].strip()
+        except Exception:
+            pass
+
+    return ""
+
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +195,7 @@ def llm_normalize_uom(df: pd.DataFrame, uom_col: str) -> pd.DataFrame:
     # Always apply rule-based normalization first
     df[uom_col] = df[uom_col].apply(normalize_uom)
 
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    if not _LLM_AVAILABLE:
         return df
 
     non_standard_mask = ~df[uom_col].apply(
@@ -134,8 +216,8 @@ def llm_normalize_uom(df: pd.DataFrame, uom_col: str) -> pd.DataFrame:
             "Example: {\"kilogram\": \"KG\", \"grams\": \"GM\"}.\n"
             f"Values to normalize:\n{values_list}"
         )
-        response = _gemini_model.generate_content(prompt)
-        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+        text = _llm_generate(prompt)
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
             mapping = json.loads(json_match.group())
             clean_mapping = {
@@ -174,7 +256,7 @@ def llm_extract_grade_spec(item_text: str) -> str:
     Falls back to extract_grade_spec() if Gemini is unavailable.
     Valid grades: USP, EP, IP, IH, BP
     """
-    if not _GEMINI_AVAILABLE or _gemini_model is None or not isinstance(item_text, str):
+    if not _LLM_AVAILABLE or not isinstance(item_text, str):
         return extract_grade_spec(item_text)
     try:
         prompt = (
@@ -185,8 +267,7 @@ def llm_extract_grade_spec(item_text: str) -> str:
             "If unclear, return USP.\n"
             f"Item: {item_text}"
         )
-        response = _gemini_model.generate_content(prompt)
-        grade = response.text.strip().upper()
+        grade = _llm_generate(prompt).upper()
         if grade in ("USP", "EP", "IP", "IH", "BP"):
             return grade
         return extract_grade_spec(item_text)
@@ -216,7 +297,7 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
     if cache_key in _item_relevance_cache:
         return _item_relevance_cache[cache_key]
 
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    if not _LLM_AVAILABLE:
         _item_relevance_cache[cache_key] = _relevant
         return _relevant
 
@@ -238,8 +319,8 @@ def llm_check_item_relevance(molecule: str, item_value: str) -> dict:
             f'{{"is_relevant": <true|false>, "outlier_flag": <true|false>, '
             f'"outlier_reason": "<one sentence, empty string if relevant>"}}'
         )
-        response = _gemini_model.generate_content(prompt)
-        json_match = re.search(r'\{[^{}]*\}', response.text, re.DOTALL)
+        text = _llm_generate(prompt)
+        json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
         if json_match:
             parsed = json.loads(json_match.group())
             result = {
@@ -322,7 +403,7 @@ def llm_normalize_cipla_grade_spec(df: pd.DataFrame) -> pd.DataFrame:
         'no set pharmacopoeia present (IH can be used -inhouse)', 'IH'
     )
 
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    if not _LLM_AVAILABLE:
         return df
 
     valid_grades = {"USP", "EP", "IP", "IH", "BP"}
@@ -341,8 +422,8 @@ def llm_normalize_cipla_grade_spec(df: pd.DataFrame) -> pd.DataFrame:
             "Example: {\"some value\": \"IH\"}.\n"
             f"Values to normalize:\n{values_list}"
         )
-        response = _gemini_model.generate_content(prompt)
-        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+        text = _llm_generate(prompt)
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
             mapping = json.loads(json_match.group())
             for orig, normalized in mapping.items():
@@ -431,11 +512,11 @@ def llm_explain_outliers(outlier_df: pd.DataFrame, filter_stats: dict) -> pd.Dat
 
     df['outlier_reason_text'] = df.apply(_rule_reason, axis=1)
 
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    if not _LLM_AVAILABLE:
         return df
 
     try:
-        # Only send a sample to Gemini to avoid token limits
+        # Only send a sample to the LLM to avoid token limits
         sample_df = df.head(5)
         sample = sample_df[['outlier_reason_text']].to_dict(orient='records')
         prompt = (
@@ -444,8 +525,8 @@ def llm_explain_outliers(outlier_df: pd.DataFrame, filter_stats: dict) -> pd.Dat
             "Return a JSON array of strings in the same order.\n"
             f"Reasons: {sample}"
         )
-        response = _gemini_model.generate_content(prompt)
-        json_match = re.search(r'\[.*\]', response.text, re.DOTALL)
+        text = _llm_generate(prompt)
+        json_match = re.search(r'\[.*\]', text, re.DOTALL)
         if json_match:
             explanations = json.loads(json_match.group())
             for i, explanation in enumerate(explanations[:len(sample_df)]):
@@ -872,7 +953,7 @@ def llm_pipeline_summary(result: dict) -> str:
     Use Gemini to generate a human-readable summary of the pipeline result.
     Returns empty string if Gemini is unavailable or result is not successful.
     """
-    if not _GEMINI_AVAILABLE or _gemini_model is None:
+    if not _LLM_AVAILABLE:
         return ""
     if result.get('status') != 'success':
         return ""
@@ -886,8 +967,7 @@ def llm_pipeline_summary(result: dict) -> str:
             f"Filter stats: {meta.get('filter_stats', {})}\n"
             f"Cipla baseline avg price: ₹{meta.get('cipla_baseline', {}).get('avg_price', 0):,.2f}\n"
         )
-        response = _gemini_model.generate_content(prompt)
-        return response.text.strip()
+        return _llm_generate(prompt)
     except Exception:
         return ""
 
