@@ -1,24 +1,23 @@
-buyer,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
-Cipla Ltd,202501,KG,IP,5204.0,32447980.0,6235.1998462720985,Buyer,Cipla Ltd
-Cipla Ltd,202507,KG,USP,1100.0,7016680.0,6378.8,Buyer,Cipla Ltd
-Cipla Ltd,202508,KG,IP,15275.0,92810896.0,6075.999738134206,Buyer,Cipla Ltd
-Cipla Ltd,202509,KG,IP,700.0,4361000.0,6230.0,Buyer,Cipla Ltd
-Cipla Ltd,202511,KG,USP,13900.0,87083504.0,6265.000287769784,Buyer,Cipla Ltd
-Cipla Ltd,202601,KG,USP,2480.0,15841000.0,6387.5,Buyer,Cipla Ltd
-Hetero Labs Ltd,202512,KG,USP,5000.0,30568750.0,6113.75,Buyer,Hetero Labs Ltd
-Macleods Pharmaceuticals Ltd,202501,KG,USP,14370.0,84701104.5,5894.300939457203,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202503,KG,USP,353.28,2235012.75,6326.462720788044,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202504,KG,USP,247.25,1587349.62,6420.018685540951,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202506,KG,USP,10000.0,60763208.0,6076.3208,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202507,KG,USP,10600.0,62239410.38,5871.642488679246,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202511,KG,USP,7322.83,42940857.0,5863.970213701534,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202512,KG,USP,14000.0,81804800.5,5843.200035714286,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202601,KG,USP,16000.0,93388800.75,5836.800046875,Buyer,Macleods Pharmaceuticals Ltd
-Sun Pharmaceutical Industries Ltd,202502,KG,USP,2650.0,17207775.0,6493.5,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202504,KG,USP,800.0,5126720.0,6408.4,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202507,KG,USP,200.0,1275760.0,6378.8,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202508,KG,USP,350.0,2294740.0,6556.4,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202509,KG,USP,500.0,3287450.0,6574.9,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202511,KG,USP,550.0,3642650.0,6623.0,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202512,KG,USP,500.0,3376250.0,6752.5,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Pharmaceutical Industries Ltd,202601,KG,USP,250.0,1679800.0,6719.2,Buyer,Sun Pharmaceutical Industries Ltd
+buyer,COUNTRY,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
+Cipla Ltd,CHINA,202501,KG,IP,5204.0,32447980.0,6235.1998462720985,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202507,KG,USP,1100.0,7016680.0,6378.8,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202508,KG,IP,15275.0,92810896.0,6075.999738134206,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202509,KG,IP,500.0,3115000.0,6230.0,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202511,KG,USP,13900.0,87083504.0,6265.000287769784,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202601,KG,USP,2480.0,15841000.0,6387.5,Buyer,Cipla Ltd
+Hetero Labs Ltd,CHINA,202512,KG,USP,5000.0,30568750.0,6113.75,Buyer,Hetero Labs Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202501,KG,USP,14370.0,84701104.5,5894.300939457203,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202503,KG,USP,353.28,2235012.75,6326.462720788044,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202504,KG,USP,247.25,1587349.62,6420.018685540951,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202506,KG,USP,10000.0,60763208.0,6076.3208,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202507,KG,USP,10600.0,62239410.38,5871.642488679246,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202511,KG,USP,7322.83,42940857.0,5863.970213701534,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202512,KG,USP,14000.0,81804800.5,5843.200035714286,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202601,KG,USP,16000.0,93388800.75,5836.800046875,Buyer,Macleods Pharmaceuticals Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202502,KG,USP,2650.0,17207775.0,6493.5,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202504,KG,USP,800.0,5126720.0,6408.4,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202508,KG,USP,350.0,2294740.0,6556.4,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202509,KG,USP,500.0,3287450.0,6574.9,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202511,KG,USP,550.0,3642650.0,6623.0,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202512,KG,USP,500.0,3376250.0,6752.5,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Pharmaceutical Industries Ltd,CHINA,202601,KG,USP,250.0,1679800.0,6719.2,Buyer,Sun Pharmaceutical Industries Ltd

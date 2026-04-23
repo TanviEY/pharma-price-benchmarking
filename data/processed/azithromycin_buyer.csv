@@ -1,214 +1,186 @@
-buyer,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
-Ajanta Pharma Ltd,202507,KG,USP,625.0,7618800.0,12190.08,Buyer,Ajanta Pharma Ltd
-Ajanta Pharma Ltd,202509,KG,USP,200.0,2487800.0,12439.0,Buyer,Ajanta Pharma Ltd
-Ajanta Pharma Ltd,202512,KG,USP,750.0,9723450.0,12964.6,Buyer,Ajanta Pharma Ltd
-Ajanta Pharma Ltd,202602,KG,USP,1300.0,16964740.0,13049.8,Buyer,Ajanta Pharma Ltd
-Alembic Pharmaceuticals Ltd,202504,KG,USP,17000.0,201193350.0,11834.902941176471,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202505,KG,IP,6000.0,72576000.0,12096.0,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202506,KG,IP,10000.0,121834998.0,12183.4998,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202507,KG,IP,5000.0,59909000.0,11981.8,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202508,KG,USP,6000.0,64079100.0,10679.85,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202509,KG,IP,10000.0,124390000.0,12439.0,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202512,KG,IP,10000.0,126560000.0,12656.0,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202601,KG,IP,14000.0,179464800.0,12818.914285714285,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202601,KG,USP,3200.0,36480000.0,11400.0,Buyer,Alembic Pharmaceuticals Ltd
-Alembic Pharmaceuticals Ltd,202602,KG,USP,2800.0,31920000.0,11400.0,Buyer,Alembic Pharmaceuticals Ltd
-Amn Life Science Pvt Ltd,202509,KG,USP,600.0,7636200.0,12727.0,Buyer,Amn Life Science Pvt Ltd
-Amn Life Science Pvt Ltd,202512,KG,USP,1200.0,15838304.0,13198.586666666666,Buyer,Amn Life Science Pvt Ltd
-Anm Pharma Pvt Ltd,202507,KG,IH,250.0,3020687.25,12082.749,Buyer,Anm Pharma Pvt Ltd
-Anuh Pharma Ltd,202505,KG,USP,6000.0,64790655.0,10798.4425,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202506,KG,USP,7375.0,79846324.0,10826.62020338983,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202507,KG,USP,14000.0,149881872.0,10705.848,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202508,KG,IP,5000.0,61606528.0,12321.3056,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202508,KG,USP,10000.0,116534612.0,11653.4612,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202511,KG,USP,3350.0,37143126.0,11087.500298507463,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202601,KG,USP,500.0,6356000.0,12712.0,Buyer,Anuh Pharma Ltd
-Anuh Pharma Ltd,202602,KG,USP,8000.0,91015354.0,11376.91925,Buyer,Anuh Pharma Ltd
-Aquatic Remedies Ltd,202506,KG,IP,6000.0,71877482.0,11979.580333333333,Buyer,Aquatic Remedies Ltd
-Aquatic Remedies Ltd,202507,KG,IP,7700.0,91287890.0,11855.57012987013,Buyer,Aquatic Remedies Ltd
-Aquatic Remedies Ltd,202511,KG,IP,750.0,8928974.0,11905.298666666667,Buyer,Aquatic Remedies Ltd
-Aquatic Remedies Ltd,202512,KG,USP,3000.0,38903656.0,12967.885333333334,Buyer,Aquatic Remedies Ltd
-Aquatic Remedies Ltd,202601,KG,IP,5000.0,63575944.0,12715.1888,Buyer,Aquatic Remedies Ltd
-Aquatic Remedies Ltd,202601,KG,USP,2000.0,25907430.0,12953.715,Buyer,Aquatic Remedies Ltd
-Associated Biotech,202509,KG,IH,609.0,7326735.0,12030.763546798029,Buyer,Associated Biotech
-Aurobindo Pharma Ltd,202507,KG,USP,3125.0,44891876.0,14365.40032,Buyer,Aurobindo Pharma Ltd
-Aurobindo Pharma Ltd,202509,KG,USP,2300.0,33820752.0,14704.674782608696,Buyer,Aurobindo Pharma Ltd
-Aurobindo Pharma Ltd,202512,KG,USP,1100.0,16612062.0,15101.874545454546,Buyer,Aurobindo Pharma Ltd
-Aurobindo Pharma Ltd,202601,KG,USP,875.0,13148975.0,15027.4,Buyer,Aurobindo Pharma Ltd
-Bal Pharma Ltd,202504,KG,IP,250.0,3031000.0,12124.0,Buyer,Bal Pharma Ltd
-Bal Pharma Ltd,202504,KG,USP,1250.0,15187475.0,12149.98,Buyer,Bal Pharma Ltd
-Bal Pharma Ltd,202505,KG,IP,250.0,2994250.0,11977.0,Buyer,Bal Pharma Ltd
-Bal Pharma Ltd,202509,KG,USP,4000.0,49224000.0,12306.0,Buyer,Bal Pharma Ltd
-Bharat Parenterals Ltd,202601,KG,USP,920.0,11695040.0,12712.0,Buyer,Bharat Parenterals Ltd
-Bliss Gvs Pharma Ltd,202509,KG,IH,2500.0,30927500.0,12371.0,Buyer,Bliss Gvs Pharma Ltd
-Bliss Gvs Pharma Ltd,202509,KG,USP,1050.0,15690150.0,14943.0,Buyer,Bliss Gvs Pharma Ltd
-Bliss Gvs Pharma Ltd,202512,KG,USP,2875.0,36748248.0,12781.999304347826,Buyer,Bliss Gvs Pharma Ltd
-Cadila Pharmaceuticals Ltd,202505,KG,USP,670.3,8107949.0,12096.000298373863,Buyer,Cadila Pharmaceuticals Ltd
-Cadila Pharmaceuticals Ltd,202506,KG,USP,183.3,2249274.25,12270.99972722313,Buyer,Cadila Pharmaceuticals Ltd
-Cadila Pharmaceuticals Ltd,202601,KG,USP,1100.0,14245440.0,12950.4,Buyer,Cadila Pharmaceuticals Ltd
-Calyx Chemicals And Pharmaceuticals Ltd,202504,KG,USP,3000.0,32595000.0,10865.0,Buyer,Calyx Chemicals And Pharmaceuticals Ltd
-Calyx Chemicals And Pharmaceuticals Ltd,202505,KG,USP,2000.0,21045300.0,10522.65,Buyer,Calyx Chemicals And Pharmaceuticals Ltd
-Caplin Point Laboratories Ltd,202505,KG,USP,500.0,5983200.0,11966.4,Buyer,Caplin Point Laboratories Ltd
-Central Drug House,202504,KG,IP,1000.0,11938243.0,11938.243,Buyer,Central Drug House
-Central Drug House,202506,KG,IP,1000.0,11932466.0,11932.466,Buyer,Central Drug House
-Century Pharmaceuticals Ltd,202508,KG,USP,12000.0,130795196.0,10899.599666666667,Buyer,Century Pharmaceuticals Ltd
-Century Pharmaceuticals Ltd,202512,KG,USP,12000.0,132102000.0,11008.5,Buyer,Century Pharmaceuticals Ltd
-Century Pharmaceuticals Ltd,202601,KG,USP,12000.0,134611200.0,11217.6,Buyer,Century Pharmaceuticals Ltd
-Credo Life Sciences Pvt Ltd,202512,KG,USP,600.0,7625400.0,12709.0,Buyer,Credo Life Sciences Pvt Ltd
-Credo Life Sciences Pvt Ltd,202601,KG,USP,600.0,7736160.25,12893.600416666666,Buyer,Credo Life Sciences Pvt Ltd
-Credo Life Sciences Pvt Ltd,202602,KG,USP,500.0,6485850.0,12971.7,Buyer,Credo Life Sciences Pvt Ltd
-Del Trade International Pvt Ltd,202505,KG,IP,1975.0,23377680.0,11836.8,Buyer,Del Trade International Pvt Ltd
-Del Trade International Pvt Ltd,202509,KG,IP,2000.0,24564000.0,12282.0,Buyer,Del Trade International Pvt Ltd
-Desource,202506,KG,IP,1000.0,11884750.0,11884.75,Buyer,Desource
-Desource,202508,KG,IP,1000.0,12138200.0,12138.2,Buyer,Desource
-Dilipkumar And Co,202504,KG,IP,1500.0,17952792.0,11968.528,Buyer,Dilipkumar And Co
-Dilipkumar And Co,202505,KG,IP,1500.0,17767714.0,11845.142666666667,Buyer,Dilipkumar And Co
-Dilipkumar And Co,202506,KG,IP,3000.0,35607374.0,11869.124666666667,Buyer,Dilipkumar And Co
-Dilipkumar And Co,202508,KG,IP,2000.0,23980544.0,11990.272,Buyer,Dilipkumar And Co
-Dilipkumar And Co,202509,KG,IP,2000.0,24588198.0,12294.099,Buyer,Dilipkumar And Co
-Dpb Pharmaceuticals Ltd,202505,KG,USP,2000.0,24078663.0,12039.3315,Buyer,Dpb Pharmaceuticals Ltd
-Dpb Pharmaceuticals Ltd,202506,KG,USP,2000.0,24547188.0,12273.594,Buyer,Dpb Pharmaceuticals Ltd
-Dpb Pharmaceuticals Ltd,202507,KG,USP,4500.0,55061624.0,12235.916444444445,Buyer,Dpb Pharmaceuticals Ltd
-Dpb Pharmaceuticals Ltd,202508,KG,USP,1500.0,18465956.0,12310.637333333334,Buyer,Dpb Pharmaceuticals Ltd
-Dr Reddy S Laboratories Ltd,202505,KG,USP,500.0,6048000.0,12096.0,Buyer,Dr Reddy S Laboratories Ltd
-Dr Reddy S Laboratories Ltd,202511,KG,USP,500.0,6297700.0,12595.4,Buyer,Dr Reddy S Laboratories Ltd
-Envee Drugs Pvt Ltd,202504,KG,USP,1000.0,10022400.0,10022.4,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202505,KG,USP,2000.0,23901462.0,11950.731,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202506,KG,USP,10000.0,107576200.0,10757.62,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202507,KG,USP,6150.0,66018840.0,10734.770731707316,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202508,KG,USP,11050.0,119223287.0,10789.437737556562,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202509,KG,USP,6850.0,74309160.0,10848.052554744525,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202511,KG,USP,4350.0,47497648.0,10918.999540229885,Buyer,Envee Drugs Pvt Ltd
-Envee Drugs Pvt Ltd,202601,KG,USP,1886.8,21369134.0,11325.59571761713,Buyer,Envee Drugs Pvt Ltd
-Farmachem Life Pvt Ltd,202505,KG,IP,2000.0,23626220.0,11813.11,Buyer,Farmachem Life Pvt Ltd
-Farmachem Life Pvt Ltd,202506,KG,IP,2000.0,23687758.0,11843.879,Buyer,Farmachem Life Pvt Ltd
-Farmachem Life Pvt Ltd,202506,KG,USP,2000.0,24304682.0,12152.341,Buyer,Farmachem Life Pvt Ltd
-Farmachem Life Pvt Ltd,202508,KG,IP,2000.0,23799944.0,11899.972,Buyer,Farmachem Life Pvt Ltd
-Farmachem Life Pvt Ltd,202601,KG,USP,4000.0,51601211.5,12900.302875,Buyer,Farmachem Life Pvt Ltd
-Farmachem Life Pvt Ltd,202602,KG,USP,2000.0,25956795.0,12978.3975,Buyer,Farmachem Life Pvt Ltd
-Fdc Ltd,202512,KG,IP,200.0,2774000.0,13870.0,Buyer,Fdc Ltd
-Fdc Ltd,202601,KG,USP,650.0,8477040.0,13041.6,Buyer,Fdc Ltd
-G C Chemie Pharmie Ltd,202505,KG,IP,6000.0,70579560.0,11763.26,Buyer,G C Chemie Pharmie Ltd
-G C Chemie Pharmie Ltd,202506,KG,IP,2000.0,23681812.0,11840.906,Buyer,G C Chemie Pharmie Ltd
-G C Chemie Pharmie Ltd,202508,KG,IP,3000.0,36695333.0,12231.777666666667,Buyer,G C Chemie Pharmie Ltd
-G C Chemie Pharmie Ltd,202512,KG,IP,2000.0,25558814.0,12779.407,Buyer,G C Chemie Pharmie Ltd
-G C Chemie Pharmie Ltd,202512,KG,USP,1000.0,12957500.0,12957.5,Buyer,G C Chemie Pharmie Ltd
-G C Chemie Pharmie Ltd,202601,KG,IP,10000.0,127724416.0,12772.4416,Buyer,G C Chemie Pharmie Ltd
-General Import Co India Pvt Ltd,202505,KG,USP,1000.0,11729422.0,11729.422,Buyer,General Import Co India Pvt Ltd
-General Import Co India Pvt Ltd,202507,KG,USP,1000.0,11824186.0,11824.186,Buyer,General Import Co India Pvt Ltd
-General Import Co India Pvt Ltd,202508,KG,USP,1000.0,11989162.0,11989.162,Buyer,General Import Co India Pvt Ltd
-Globela Pharma Pvt Ltd,202506,KG,USP,1000.0,11867400.5,11867.4005,Buyer,Globela Pharma Pvt Ltd
-Globela Pharma Pvt Ltd,202601,KG,USP,850.0,10542720.0,12403.2,Buyer,Globela Pharma Pvt Ltd
-Gorang International,202504,KG,IP,2000.0,23867866.0,11933.933,Buyer,Gorang International
-Gorang International,202504,KG,USP,2000.0,24192000.0,12096.0,Buyer,Gorang International
-Gorang International,202506,KG,IP,6000.0,71619408.0,11936.568,Buyer,Gorang International
-Gorang International,202507,KG,IP,4000.0,47444644.0,11861.161,Buyer,Gorang International
-Gorang International,202507,KG,USP,6000.0,72440628.0,12073.438,Buyer,Gorang International
-Gorang International,202509,KG,USP,3875.0,48548076.0,12528.535741935484,Buyer,Gorang International
-Hof Pharmaceuticals Ltd,202507,KG,USP,260.0,3148236.0,12108.6,Buyer,Hof Pharmaceuticals Ltd
-Ind Swift Laboratories Ltd,202512,KG,USP,600.0,8085480.0,13475.8,Buyer,Ind Swift Laboratories Ltd
-Ind Swift Ltd,202507,KG,USP,2700.0,34122816.0,12638.08,Buyer,Ind Swift Ltd
-Indoco Remedies Ltd,202511,KG,USP,500.0,6734875.0,13469.75,Buyer,Indoco Remedies Ltd
-Innova Captab Ltd,202505,KG,USP,3546.04,42892791.25,12095.969377107986,Buyer,Innova Captab Ltd
-Innova Captab Ltd,202508,KG,IP,3627.38,43628552.0,12027.565901559803,Buyer,Innova Captab Ltd
-Innova Captab Ltd,202509,KG,IP,2000.0,24386000.0,12193.0,Buyer,Innova Captab Ltd
-Inspira Bio Pharm Pvt Ltd,202509,KG,USP,4000.0,49775542.0,12443.8855,Buyer,Inspira Bio Pharm Pvt Ltd
-J B Chemicals And Pharmaceuticals Ltd,202509,KG,EP,1000.0,11494300.0,11494.3,Buyer,J B Chemicals And Pharmaceuticals Ltd
-Jubilant Generics Ltd,202505,KG,EP,700.0,8769600.0,12528.0,Buyer,Jubilant Generics Ltd
-Jubilant Generics Ltd,202507,KG,EP,700.0,8810200.0,12586.0,Buyer,Jubilant Generics Ltd
-Kopran Ltd,202506,KG,USP,1000.0,12271000.0,12271.0,Buyer,Kopran Ltd
-Kopran Ltd,202512,KG,USP,1000.0,12957500.0,12957.5,Buyer,Kopran Ltd
-Kopran Research Laboratories Ltd,202504,KG,USP,2500.0,28404000.0,11361.6,Buyer,Kopran Research Laboratories Ltd
-Kopran Research Laboratories Ltd,202505,KG,USP,2500.0,27589876.0,11035.9504,Buyer,Kopran Research Laboratories Ltd
-Kopran Research Laboratories Ltd,202507,KG,USP,5000.0,56917030.0,11383.406,Buyer,Kopran Research Laboratories Ltd
-Kopran Research Laboratories Ltd,202508,KG,USP,4000.0,43774200.0,10943.55,Buyer,Kopran Research Laboratories Ltd
-Kopran Research Laboratories Ltd,202509,KG,USP,1000.0,11061825.0,11061.825,Buyer,Kopran Research Laboratories Ltd
-Kopran Research Laboratories Ltd,202511,KG,USP,7000.0,78312498.0,11187.499714285714,Buyer,Kopran Research Laboratories Ltd
-Lupin Ltd,202505,KG,USP,1900.0,25844656.0,13602.45052631579,Buyer,Lupin Ltd
-Lupin Ltd,202506,KG,USP,1000.0,13793250.0,13793.25,Buyer,Lupin Ltd
-Lupin Ltd,202507,KG,USP,960.41,13254852.25,13801.243479347362,Buyer,Lupin Ltd
-Lupin Ltd,202509,KG,USP,7891.4,111578392.0,14139.239171756597,Buyer,Lupin Ltd
-Lupin Ltd,202601,KG,USP,1181.1,17051776.5,14437.19964439929,Buyer,Lupin Ltd
-Magbro Health Care Pvt Ltd,202504,KG,USP,500.0,6004800.0,12009.6,Buyer,Magbro Health Care Pvt Ltd
-Magbro Health Care Pvt Ltd,202508,KG,USP,500.0,6202000.0,12404.0,Buyer,Magbro Health Care Pvt Ltd
-Magbro Health Care Pvt Ltd,202509,KG,USP,500.0,6230000.0,12460.0,Buyer,Magbro Health Care Pvt Ltd
-Mahima Lifesciences Pvt Ltd,202504,KG,USP,500.0,5594400.0,11188.8,Buyer,Mahima Lifesciences Pvt Ltd
-Medico Remedies Ltd,202506,KG,USP,1000.0,12288138.0,12288.138,Buyer,Medico Remedies Ltd
-Medico Remedies Ltd,202508,KG,USP,3500.0,42512832.0,12146.523428571429,Buyer,Medico Remedies Ltd
-Medico Remedies Ltd,202601,KG,USP,2863.0,37427481.5,13072.819245546629,Buyer,Medico Remedies Ltd
-Medico Remedies Ltd,202602,KG,USP,2000.0,26243484.0,13121.742,Buyer,Medico Remedies Ltd
-Medopharm,202505,KG,USP,1000.0,11977000.0,11977.0,Buyer,Medopharm
-Medopharm,202507,KG,USP,1000.0,12152000.0,12152.0,Buyer,Medopharm
-Medopharm,202511,KG,USP,1000.0,11975100.0,11975.1,Buyer,Medopharm
-Medopharm,202512,KG,USP,500.0,6478750.0,12957.5,Buyer,Medopharm
-Medopharm Pvt Ltd,202507,KG,USP,250.0,3298400.0,13193.6,Buyer,Medopharm Pvt Ltd
-Mehta Api Pvt Ltd,202506,KG,USP,1000.0,10264260.0,10264.26,Buyer,Mehta Api Pvt Ltd
-Mehta Api Pvt Ltd,202508,KG,IP,2000.0,24464524.0,12232.262,Buyer,Mehta Api Pvt Ltd
-Mehta Api Pvt Ltd,202511,KG,IP,2000.0,25060000.0,12530.0,Buyer,Mehta Api Pvt Ltd
-Mehta Medicare Pvt Ltd,202504,KG,IP,1000.0,11846510.0,11846.51,Buyer,Mehta Medicare Pvt Ltd
-Mehta Medicare Pvt Ltd,202505,KG,IP,1000.0,11729332.0,11729.332,Buyer,Mehta Medicare Pvt Ltd
-Mehta Medicare Pvt Ltd,202509,KG,IP,1000.0,12200914.0,12200.914,Buyer,Mehta Medicare Pvt Ltd
-Mehta Medicare Pvt Ltd,202511,KG,IP,1000.0,12357985.0,12357.985,Buyer,Mehta Medicare Pvt Ltd
-Mehta Pharmaceutical Industries,202504,KG,USP,10000.0,109858889.0,10985.8889,Buyer,Mehta Pharmaceutical Industries
-Mehta Pharmaceutical Industries,202507,KG,IP,3000.0,35455108.0,11818.369333333334,Buyer,Mehta Pharmaceutical Industries
-Micro Labs Ltd,202505,KG,USP,2000.0,24192000.0,12096.0,Buyer,Micro Labs Ltd
-Micro Labs Ltd,202509,KG,USP,2000.0,24612000.0,12306.0,Buyer,Micro Labs Ltd
-Minerva Biogenix Pvt Ltd,202509,KG,USP,1000.0,12306000.0,12306.0,Buyer,Minerva Biogenix Pvt Ltd
-Next Wave India,202509,KG,USP,1000.0,12460000.0,12460.0,Buyer,Next Wave India
-Odin Healthcare Pvt Ltd,202506,KG,USP,1000.0,12278048.0,12278.048,Buyer,Odin Healthcare Pvt Ltd
-Odin Healthcare Pvt Ltd,202509,KG,USP,1000.0,12446053.0,12446.053,Buyer,Odin Healthcare Pvt Ltd
-Odin Healthcare Pvt Ltd,202512,KG,USP,1000.0,12537049.0,12537.049,Buyer,Odin Healthcare Pvt Ltd
-Pinnacle Life Science Pvt Ltd,202504,KG,USP,2500.0,29011000.0,11604.4,Buyer,Pinnacle Life Science Pvt Ltd
-Pinnacle Life Science Pvt Ltd,202508,KG,USP,2000.0,23603040.0,11801.52,Buyer,Pinnacle Life Science Pvt Ltd
-Pretty Petals Pvt Ltd,202507,KG,IH,7150.0,82542464.0,11544.400559440559,Buyer,Pretty Petals Pvt Ltd
-Pretty Petals Pvt Ltd,202511,KG,IH,7200.0,84738600.0,11769.25,Buyer,Pretty Petals Pvt Ltd
-Ruskin Chemipharm,202505,KG,IP,1500.0,17774324.0,11849.549333333332,Buyer,Ruskin Chemipharm
-Ruskin Chemipharm,202507,KG,IP,1500.0,17853830.0,11902.553333333333,Buyer,Ruskin Chemipharm
-Ruskin Chemipharm,202508,KG,IP,2000.0,24475452.0,12237.726,Buyer,Ruskin Chemipharm
-Ruskin Chemipharm,202512,KG,IP,2000.0,25590710.0,12795.355,Buyer,Ruskin Chemipharm
-Scott Edil Pharmacia Ltd,202508,KG,USP,3000.0,37841768.0,12613.922666666667,Buyer,Scott Edil Pharmacia Ltd
-Sevantilal And Sons,202505,KG,IP,3000.0,35201572.0,11733.857333333333,Buyer,Sevantilal And Sons
-Sevantilal And Sons,202508,KG,IP,2000.0,24273668.0,12136.834,Buyer,Sevantilal And Sons
-Sevantilal And Sons,202508,KG,USP,2000.0,24318764.0,12159.382,Buyer,Sevantilal And Sons
-Sevantilal And Sons,202511,KG,IP,2000.0,25069812.0,12534.906,Buyer,Sevantilal And Sons
-Shah C J World Llp,202506,KG,USP,1000.0,12145000.0,12145.0,Buyer,Shah C J World Llp
-Shah C J World Llp,202508,KG,USP,1000.0,12404000.0,12404.0,Buyer,Shah C J World Llp
-Shah C J World Llp,202511,KG,USP,2000.0,24856526.0,12428.263,Buyer,Shah C J World Llp
-Shah C J World Llp,202512,KG,USP,1000.0,12957500.0,12957.5,Buyer,Shah C J World Llp
-Shah Tc Distribution Llp,202504,KG,IP,14825.0,178141816.0,12016.311365935919,Buyer,Shah Tc Distribution Llp
-Shah Tc Distribution Llp,202506,KG,IP,4275.0,51883124.0,12136.403274853801,Buyer,Shah Tc Distribution Llp
-Shah Tc Distribution Llp,202507,KG,IP,2350.0,28359800.0,12068.0,Buyer,Shah Tc Distribution Llp
-Shalina Laboratories Pvt Ltd,202508,KG,USP,750.0,9303000.0,12404.0,Buyer,Shalina Laboratories Pvt Ltd
-Shriya Pharma And Surgical,202507,KG,USP,2000.0,24584340.0,12292.17,Buyer,Shriya Pharma And Surgical
-Shriya Pharma And Surgical,202602,KG,USP,2000.0,26118294.0,13059.147,Buyer,Shriya Pharma And Surgical
-Sun Pharmaceutical Industries Ltd,202509,KG,IP,2550.0,31719450.0,12439.0,Buyer,Sun Pharmaceutical Industries Ltd
-Sun Rise Enterprises,202504,KG,IP,3500.0,41611812.0,11889.089142857143,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202505,KG,IP,4800.0,56829622.0,11839.504583333333,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202505,KG,USP,2000.0,23447164.0,11723.582,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202506,KG,IP,3000.0,36037868.0,12012.622666666666,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202507,KG,IP,5500.0,65714656.0,11948.119272727272,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202507,KG,USP,2000.0,24551332.0,12275.666,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202508,KG,IP,7000.0,85337980.0,12191.14,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202601,KG,IP,10000.0,127706860.0,12770.686,Buyer,Sun Rise Enterprises
-Sun Rise Enterprises,202602,KG,IP,2000.0,25540704.0,12770.352,Buyer,Sun Rise Enterprises
-Surmount Laboratories Ltd,202508,KG,USP,2000.0,24472206.0,12236.103,Buyer,Surmount Laboratories Ltd
-Surmount Laboratories Ltd,202602,KG,USP,1000.0,12971700.0,12971.7,Buyer,Surmount Laboratories Ltd
-Surmount Laboratories Pvt Ltd,202505,KG,USP,1000.0,11845894.0,11845.894,Buyer,Surmount Laboratories Pvt Ltd
-Theon Pharmaceuticals Ltd,202505,KG,USP,2000.0,23953999.5,11976.99975,Buyer,Theon Pharmaceuticals Ltd
-Theon Pharmaceuticals Ltd,202506,KG,USP,2000.0,24290000.0,12145.0,Buyer,Theon Pharmaceuticals Ltd
-Theon Pharmaceuticals Ltd,202508,KG,IH,229.5,2846718.0,12404.0,Buyer,Theon Pharmaceuticals Ltd
-Theon Pharmaceuticals Ltd,202508,KG,USP,1770.5,21961282.0,12404.0,Buyer,Theon Pharmaceuticals Ltd
-Theon Pharmaceuticals Ltd,202511,KG,USP,2000.0,25059999.0,12529.9995,Buyer,Theon Pharmaceuticals Ltd
-Theon Pharmaceuticals Ltd,202512,KG,USP,2000.0,25564001.0,12782.0005,Buyer,Theon Pharmaceuticals Ltd
-Unimax Chemicals Pvt Ltd,202505,KG,USP,2000.0,21387690.0,10693.845,Buyer,Unimax Chemicals Pvt Ltd
-Unimax Chemicals Pvt Ltd,202506,KG,USP,1000.0,10693845.0,10693.845,Buyer,Unimax Chemicals Pvt Ltd
-Unimax Chemicals Pvt Ltd,202507,KG,USP,1000.0,10693845.0,10693.845,Buyer,Unimax Chemicals Pvt Ltd
-Unimax Chemicals Pvt Ltd,202509,KG,USP,1175.0,12847195.0,10933.782978723404,Buyer,Unimax Chemicals Pvt Ltd
-Unimax Laboratories,202506,KG,USP,750.0,8845200.0,11793.6,Buyer,Unimax Laboratories
-Unimax Laboratories,202507,KG,USP,850.0,10710357.0,12600.42,Buyer,Unimax Laboratories
-Unimax Laboratories,202511,KG,USP,800.0,10078416.0,12598.02,Buyer,Unimax Laboratories
-Vincit Labs Pvt Ltd,202511,KG,USP,1000.0,11421000.0,11421.0,Buyer,Vincit Labs Pvt Ltd
-Zim Laboratories Ltd,202507,KG,USP,4000.0,48272000.0,12068.0,Buyer,Zim Laboratories Ltd
-Zim Laboratories Ltd,202508,KG,USP,2500.0,29600900.0,11840.36,Buyer,Zim Laboratories Ltd
-Zim Laboratories Ltd,202511,KG,USP,2000.0,24164999.5,12082.49975,Buyer,Zim Laboratories Ltd
-Zim Laboratories Ltd,202512,KG,USP,4000.0,51198000.0,12799.5,Buyer,Zim Laboratories Ltd
+buyer,COUNTRY,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
+Ajanta Pharma Ltd,CHINA,202507,KG,USP,625.0,7618800.0,12190.08,Buyer,Ajanta Pharma Ltd
+Ajanta Pharma Ltd,CHINA,202509,KG,USP,200.0,2487800.0,12439.0,Buyer,Ajanta Pharma Ltd
+Ajanta Pharma Ltd,CHINA,202512,KG,USP,750.0,9723450.0,12964.6,Buyer,Ajanta Pharma Ltd
+Ajanta Pharma Ltd,CHINA,202602,KG,USP,1300.0,16964740.0,13049.8,Buyer,Ajanta Pharma Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202504,KG,USP,17000.0,201193350.0,11834.902941176471,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202505,KG,IP,6000.0,72576000.0,12096.0,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202506,KG,IP,10000.0,121834998.0,12183.4998,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202507,KG,IP,5000.0,59909000.0,11981.8,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202508,KG,USP,6000.0,64079100.0,10679.85,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202509,KG,IP,10000.0,124390000.0,12439.0,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202512,KG,IP,10000.0,126560000.0,12656.0,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202601,KG,IP,14000.0,179464800.0,12818.914285714285,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202601,KG,USP,3200.0,36480000.0,11400.0,Buyer,Alembic Pharmaceuticals Ltd
+Alembic Pharmaceuticals Ltd,CHINA,202602,KG,USP,2800.0,31920000.0,11400.0,Buyer,Alembic Pharmaceuticals Ltd
+Amn Life Science Pvt Ltd,CHINA,202509,KG,USP,600.0,7636200.0,12727.0,Buyer,Amn Life Science Pvt Ltd
+Amn Life Science Pvt Ltd,CHINA,202512,KG,USP,1200.0,15838304.0,13198.586666666666,Buyer,Amn Life Science Pvt Ltd
+Anm Pharma Pvt Ltd,CHINA,202507,KG,USP,250.0,3020687.25,12082.749,Buyer,Anm Pharma Pvt Ltd
+Anuh Pharma Ltd,CHINA,202505,KG,USP,1000.0,11418719.0,11418.719,Buyer,Anuh Pharma Ltd
+Anuh Pharma Ltd,CHINA,202506,KG,USP,1000.0,11281856.0,11281.856,Buyer,Anuh Pharma Ltd
+Anuh Pharma Ltd,CHINA,202507,KG,USP,4000.0,43421496.0,10855.374,Buyer,Anuh Pharma Ltd
+Anuh Pharma Ltd,CHINA,202508,KG,IP,5000.0,61606528.0,12321.3056,Buyer,Anuh Pharma Ltd
+Anuh Pharma Ltd,CHINA,202601,KG,USP,500.0,6356000.0,12712.0,Buyer,Anuh Pharma Ltd
+Anuh Pharma Ltd,CHINA,202602,KG,USP,3000.0,33899796.0,11299.932,Buyer,Anuh Pharma Ltd
+Aquatic Remedies Ltd,CHINA,202506,KG,IP,6000.0,71877482.0,11979.580333333333,Buyer,Aquatic Remedies Ltd
+Aquatic Remedies Ltd,CHINA,202507,KG,IP,7700.0,91287890.0,11855.57012987013,Buyer,Aquatic Remedies Ltd
+Aquatic Remedies Ltd,CHINA,202511,KG,IP,750.0,8928974.0,11905.298666666667,Buyer,Aquatic Remedies Ltd
+Aquatic Remedies Ltd,CHINA,202512,KG,USP,3000.0,38903656.0,12967.885333333334,Buyer,Aquatic Remedies Ltd
+Aquatic Remedies Ltd,CHINA,202601,KG,IP,5000.0,63575944.0,12715.1888,Buyer,Aquatic Remedies Ltd
+Aquatic Remedies Ltd,CHINA,202601,KG,USP,2000.0,25907430.0,12953.715,Buyer,Aquatic Remedies Ltd
+Aurobindo Pharma Ltd,CHINA,202507,KG,USP,3125.0,44891876.0,14365.40032,Buyer,Aurobindo Pharma Ltd
+Aurobindo Pharma Ltd,CHINA,202509,KG,USP,2300.0,33820752.0,14704.674782608696,Buyer,Aurobindo Pharma Ltd
+Aurobindo Pharma Ltd,CHINA,202512,KG,USP,1100.0,16612062.0,15101.874545454546,Buyer,Aurobindo Pharma Ltd
+Aurobindo Pharma Ltd,CHINA,202601,KG,USP,875.0,13148975.0,15027.4,Buyer,Aurobindo Pharma Ltd
+Bal Pharma Ltd,CHINA,202504,KG,IP,250.0,3031000.0,12124.0,Buyer,Bal Pharma Ltd
+Bal Pharma Ltd,CHINA,202504,KG,USP,500.0,6062000.0,12124.0,Buyer,Bal Pharma Ltd
+Bal Pharma Ltd,CHINA,202505,KG,IP,250.0,2994250.0,11977.0,Buyer,Bal Pharma Ltd
+Bal Pharma Ltd,CHINA,202509,KG,USP,4000.0,49224000.0,12306.0,Buyer,Bal Pharma Ltd
+Bharat Parenterals Ltd,CHINA,202601,KG,USP,920.0,11695040.0,12712.0,Buyer,Bharat Parenterals Ltd
+Bliss Gvs Pharma Ltd,CHINA,202509,KG,EP,1050.0,15690150.0,14943.0,Buyer,Bliss Gvs Pharma Ltd
+Bliss Gvs Pharma Ltd,CHINA,202509,KG,USP,2500.0,30927500.0,12371.0,Buyer,Bliss Gvs Pharma Ltd
+Bliss Gvs Pharma Ltd,CHINA,202512,KG,USP,2875.0,36748248.0,12781.999304347826,Buyer,Bliss Gvs Pharma Ltd
+Cadila Pharmaceuticals Ltd,CHINA,202505,KG,USP,670.3,8107949.0,12096.000298373863,Buyer,Cadila Pharmaceuticals Ltd
+Cadila Pharmaceuticals Ltd,CHINA,202506,KG,USP,183.3,2249274.25,12270.99972722313,Buyer,Cadila Pharmaceuticals Ltd
+Cadila Pharmaceuticals Ltd,CHINA,202601,KG,USP,1100.0,14245440.0,12950.4,Buyer,Cadila Pharmaceuticals Ltd
+Calyx Chemicals And Pharmaceuticals Ltd,CHINA,202504,KG,USP,3000.0,32595000.0,10865.0,Buyer,Calyx Chemicals And Pharmaceuticals Ltd
+Calyx Chemicals And Pharmaceuticals Ltd,CHINA,202505,KG,USP,2000.0,21045300.0,10522.65,Buyer,Calyx Chemicals And Pharmaceuticals Ltd
+Caplin Point Laboratories Ltd,CHINA,202505,KG,USP,500.0,5983200.0,11966.4,Buyer,Caplin Point Laboratories Ltd
+Central Drug House,CHINA,202504,KG,IP,1000.0,11938243.0,11938.243,Buyer,Central Drug House
+Central Drug House,CHINA,202506,KG,IP,1000.0,11932466.0,11932.466,Buyer,Central Drug House
+Century Pharmaceuticals Ltd,CHINA,202508,KG,USP,12000.0,130795196.0,10899.599666666667,Buyer,Century Pharmaceuticals Ltd
+Century Pharmaceuticals Ltd,CHINA,202512,KG,USP,12000.0,132102000.0,11008.5,Buyer,Century Pharmaceuticals Ltd
+Century Pharmaceuticals Ltd,CHINA,202601,KG,USP,12000.0,134611200.0,11217.6,Buyer,Century Pharmaceuticals Ltd
+Credo Life Sciences Pvt Ltd,CHINA,202512,KG,USP,600.0,7625400.0,12709.0,Buyer,Credo Life Sciences Pvt Ltd
+Credo Life Sciences Pvt Ltd,CHINA,202601,KG,USP,443.0,5711865.0,12893.60045146727,Buyer,Credo Life Sciences Pvt Ltd
+Credo Life Sciences Pvt Ltd,CHINA,202602,KG,USP,500.0,6485850.0,12971.7,Buyer,Credo Life Sciences Pvt Ltd
+Del Trade International Pvt Ltd,CHINA,202505,KG,IP,1975.0,23377680.0,11836.8,Buyer,Del Trade International Pvt Ltd
+Del Trade International Pvt Ltd,CHINA,202509,KG,IP,2000.0,24564000.0,12282.0,Buyer,Del Trade International Pvt Ltd
+Desource,CHINA,202506,KG,IP,1000.0,11884750.0,11884.75,Buyer,Desource
+Desource,CHINA,202508,KG,IP,1000.0,12138200.0,12138.2,Buyer,Desource
+Dilipkumar And Co,CHINA,202504,KG,IP,1500.0,17952792.0,11968.528,Buyer,Dilipkumar And Co
+Dilipkumar And Co,CHINA,202505,KG,IP,1500.0,17767714.0,11845.142666666667,Buyer,Dilipkumar And Co
+Dilipkumar And Co,CHINA,202506,KG,IP,3000.0,35607374.0,11869.124666666667,Buyer,Dilipkumar And Co
+Dilipkumar And Co,CHINA,202508,KG,IP,2000.0,23980544.0,11990.272,Buyer,Dilipkumar And Co
+Dilipkumar And Co,CHINA,202509,KG,IP,2000.0,24588198.0,12294.099,Buyer,Dilipkumar And Co
+Dpb Pharmaceuticals Ltd,CHINA,202505,KG,USP,2000.0,24078663.0,12039.3315,Buyer,Dpb Pharmaceuticals Ltd
+Dpb Pharmaceuticals Ltd,CHINA,202506,KG,USP,2000.0,24547188.0,12273.594,Buyer,Dpb Pharmaceuticals Ltd
+Dpb Pharmaceuticals Ltd,CHINA,202507,KG,USP,4500.0,55061624.0,12235.916444444445,Buyer,Dpb Pharmaceuticals Ltd
+Dpb Pharmaceuticals Ltd,CHINA,202508,KG,USP,1500.0,18465956.0,12310.637333333334,Buyer,Dpb Pharmaceuticals Ltd
+Dr Reddy S Laboratories Ltd,CHINA,202505,KG,USP,500.0,6048000.0,12096.0,Buyer,Dr Reddy S Laboratories Ltd
+Dr Reddy S Laboratories Ltd,CHINA,202511,KG,USP,500.0,6297700.0,12595.4,Buyer,Dr Reddy S Laboratories Ltd
+Envee Drugs Pvt Ltd,CHINA,202505,KG,USP,2000.0,23901462.0,11950.731,Buyer,Envee Drugs Pvt Ltd
+Envee Drugs Pvt Ltd,CHINA,202506,KG,USP,10000.0,107576200.0,10757.62,Buyer,Envee Drugs Pvt Ltd
+Envee Drugs Pvt Ltd,CHINA,202511,KG,USP,4350.0,47497648.0,10918.999540229885,Buyer,Envee Drugs Pvt Ltd
+Farmachem Life Pvt Ltd,CHINA,202505,KG,IP,2000.0,23626220.0,11813.11,Buyer,Farmachem Life Pvt Ltd
+Farmachem Life Pvt Ltd,CHINA,202506,KG,IP,2000.0,23687758.0,11843.879,Buyer,Farmachem Life Pvt Ltd
+Farmachem Life Pvt Ltd,CHINA,202506,KG,USP,2000.0,24304682.0,12152.341,Buyer,Farmachem Life Pvt Ltd
+Farmachem Life Pvt Ltd,CHINA,202508,KG,IP,2000.0,23799944.0,11899.972,Buyer,Farmachem Life Pvt Ltd
+Farmachem Life Pvt Ltd,CHINA,202601,KG,USP,4000.0,51601211.5,12900.302875,Buyer,Farmachem Life Pvt Ltd
+Farmachem Life Pvt Ltd,CHINA,202602,KG,USP,2000.0,25956795.0,12978.3975,Buyer,Farmachem Life Pvt Ltd
+Fdc Ltd,CHINA,202512,KG,IP,200.0,2774000.0,13870.0,Buyer,Fdc Ltd
+Fdc Ltd,CHINA,202601,KG,USP,650.0,8477040.0,13041.6,Buyer,Fdc Ltd
+G C Chemie Pharmie Ltd,CHINA,202505,KG,IP,6000.0,70579560.0,11763.26,Buyer,G C Chemie Pharmie Ltd
+G C Chemie Pharmie Ltd,CHINA,202506,KG,IP,2000.0,23681812.0,11840.906,Buyer,G C Chemie Pharmie Ltd
+G C Chemie Pharmie Ltd,CHINA,202508,KG,IP,3000.0,36695333.0,12231.777666666667,Buyer,G C Chemie Pharmie Ltd
+G C Chemie Pharmie Ltd,CHINA,202512,KG,IP,2000.0,25558814.0,12779.407,Buyer,G C Chemie Pharmie Ltd
+G C Chemie Pharmie Ltd,CHINA,202512,KG,USP,1000.0,12957500.0,12957.5,Buyer,G C Chemie Pharmie Ltd
+G C Chemie Pharmie Ltd,CHINA,202601,KG,IP,10000.0,127724416.0,12772.4416,Buyer,G C Chemie Pharmie Ltd
+General Import Co India Pvt Ltd,CHINA,202505,KG,USP,1000.0,11729422.0,11729.422,Buyer,General Import Co India Pvt Ltd
+Gorang International,CHINA,202504,KG,IP,2000.0,23867866.0,11933.933,Buyer,Gorang International
+Gorang International,CHINA,202504,KG,USP,2000.0,24192000.0,12096.0,Buyer,Gorang International
+Gorang International,CHINA,202506,KG,IP,6000.0,71619408.0,11936.568,Buyer,Gorang International
+Gorang International,CHINA,202507,KG,IP,2000.0,23640070.0,11820.035,Buyer,Gorang International
+Gorang International,CHINA,202507,KG,USP,6000.0,72440628.0,12073.438,Buyer,Gorang International
+Gorang International,CHINA,202509,KG,USP,3875.0,48548076.0,12528.535741935484,Buyer,Gorang International
+Hof Pharmaceuticals Ltd,CHINA,202507,KG,USP,260.0,3148236.0,12108.6,Buyer,Hof Pharmaceuticals Ltd
+Ind Swift Laboratories Ltd,CHINA,202512,KG,USP,600.0,8085480.0,13475.8,Buyer,Ind Swift Laboratories Ltd
+Ind Swift Ltd,CHINA,202507,KG,USP,2700.0,34122816.0,12638.08,Buyer,Ind Swift Ltd
+Indoco Remedies Ltd,CHINA,202511,KG,USP,500.0,6734875.0,13469.75,Buyer,Indoco Remedies Ltd
+Innova Captab Ltd,CHINA,202508,KG,IP,3627.38,43628552.0,12027.565901559803,Buyer,Innova Captab Ltd
+Innova Captab Ltd,CHINA,202509,KG,IP,2000.0,24386000.0,12193.0,Buyer,Innova Captab Ltd
+Inspira Bio Pharm Pvt Ltd,CHINA,202509,KG,USP,4000.0,49775542.0,12443.8855,Buyer,Inspira Bio Pharm Pvt Ltd
+J B Chemicals And Pharmaceuticals Ltd,CHINA,202509,KG,EP,1000.0,11494300.0,11494.3,Buyer,J B Chemicals And Pharmaceuticals Ltd
+Jubilant Generics Ltd,CHINA,202505,KG,USP,700.0,8769600.0,12528.0,Buyer,Jubilant Generics Ltd
+Jubilant Generics Ltd,CHINA,202507,KG,USP,700.0,8810200.0,12586.0,Buyer,Jubilant Generics Ltd
+Kopran Ltd,CHINA,202506,KG,USP,1000.0,12271000.0,12271.0,Buyer,Kopran Ltd
+Kopran Ltd,CHINA,202512,KG,USP,1000.0,12957500.0,12957.5,Buyer,Kopran Ltd
+Kopran Research Laboratories Ltd,CHINA,202504,KG,USP,2500.0,28404000.0,11361.6,Buyer,Kopran Research Laboratories Ltd
+Kopran Research Laboratories Ltd,CHINA,202505,KG,USP,2500.0,27589876.0,11035.9504,Buyer,Kopran Research Laboratories Ltd
+Kopran Research Laboratories Ltd,CHINA,202507,KG,USP,5000.0,56917030.0,11383.406,Buyer,Kopran Research Laboratories Ltd
+Kopran Research Laboratories Ltd,CHINA,202508,KG,USP,4000.0,43774200.0,10943.55,Buyer,Kopran Research Laboratories Ltd
+Kopran Research Laboratories Ltd,CHINA,202509,KG,USP,1000.0,11061825.0,11061.825,Buyer,Kopran Research Laboratories Ltd
+Kopran Research Laboratories Ltd,CHINA,202511,KG,USP,7000.0,78312498.0,11187.499714285714,Buyer,Kopran Research Laboratories Ltd
+Lupin Ltd,CHINA,202505,KG,USP,1900.0,25844656.0,13602.45052631579,Buyer,Lupin Ltd
+Lupin Ltd,CHINA,202506,KG,USP,1000.0,13793250.0,13793.25,Buyer,Lupin Ltd
+Lupin Ltd,CHINA,202507,KG,USP,960.41,13254852.25,13801.243479347362,Buyer,Lupin Ltd
+Lupin Ltd,CHINA,202509,KG,USP,7891.4,111578392.0,14139.239171756597,Buyer,Lupin Ltd
+Lupin Ltd,CHINA,202601,KG,USP,1181.1,17051776.5,14437.19964439929,Buyer,Lupin Ltd
+Magbro Health Care Pvt Ltd,CHINA,202508,KG,USP,500.0,6202000.0,12404.0,Buyer,Magbro Health Care Pvt Ltd
+Magbro Health Care Pvt Ltd,CHINA,202509,KG,USP,500.0,6230000.0,12460.0,Buyer,Magbro Health Care Pvt Ltd
+Medico Remedies Ltd,CHINA,202506,KG,USP,1000.0,12288138.0,12288.138,Buyer,Medico Remedies Ltd
+Medico Remedies Ltd,CHINA,202508,KG,USP,2000.0,24808000.0,12404.0,Buyer,Medico Remedies Ltd
+Medico Remedies Ltd,CHINA,202601,KG,USP,2863.0,37427481.5,13072.819245546629,Buyer,Medico Remedies Ltd
+Medico Remedies Ltd,CHINA,202602,KG,USP,2000.0,26243484.0,13121.742,Buyer,Medico Remedies Ltd
+Medopharm,CHINA,202505,KG,USP,1000.0,11977000.0,11977.0,Buyer,Medopharm
+Medopharm,CHINA,202507,KG,USP,1000.0,12152000.0,12152.0,Buyer,Medopharm
+Medopharm,CHINA,202512,KG,USP,500.0,6478750.0,12957.5,Buyer,Medopharm
+Medopharm Pvt Ltd,CHINA,202507,KG,USP,250.0,3298400.0,13193.6,Buyer,Medopharm Pvt Ltd
+Mehta Api Pvt Ltd,CHINA,202508,KG,IP,2000.0,24464524.0,12232.262,Buyer,Mehta Api Pvt Ltd
+Mehta Api Pvt Ltd,CHINA,202511,KG,IP,2000.0,25060000.0,12530.0,Buyer,Mehta Api Pvt Ltd
+Mehta Medicare Pvt Ltd,CHINA,202504,KG,IP,1000.0,11846510.0,11846.51,Buyer,Mehta Medicare Pvt Ltd
+Mehta Medicare Pvt Ltd,CHINA,202505,KG,IP,1000.0,11729332.0,11729.332,Buyer,Mehta Medicare Pvt Ltd
+Mehta Medicare Pvt Ltd,CHINA,202509,KG,IP,1000.0,12200914.0,12200.914,Buyer,Mehta Medicare Pvt Ltd
+Mehta Medicare Pvt Ltd,CHINA,202511,KG,IP,1000.0,12357985.0,12357.985,Buyer,Mehta Medicare Pvt Ltd
+Mehta Pharmaceutical Industries,CHINA,202504,KG,USP,10000.0,109858889.0,10985.8889,Buyer,Mehta Pharmaceutical Industries
+Mehta Pharmaceutical Industries,CHINA,202507,KG,IP,3000.0,35455108.0,11818.369333333334,Buyer,Mehta Pharmaceutical Industries
+Micro Labs Ltd,CHINA,202505,KG,USP,2000.0,24192000.0,12096.0,Buyer,Micro Labs Ltd
+Micro Labs Ltd,CHINA,202509,KG,USP,2000.0,24612000.0,12306.0,Buyer,Micro Labs Ltd
+Minerva Biogenix Pvt Ltd,CHINA,202509,KG,USP,1000.0,12306000.0,12306.0,Buyer,Minerva Biogenix Pvt Ltd
+Next Wave India,CHINA,202509,KG,USP,1000.0,12460000.0,12460.0,Buyer,Next Wave India
+Odin Healthcare Pvt Ltd,CHINA,202506,KG,USP,1000.0,12278048.0,12278.048,Buyer,Odin Healthcare Pvt Ltd
+Odin Healthcare Pvt Ltd,CHINA,202509,KG,USP,1000.0,12446053.0,12446.053,Buyer,Odin Healthcare Pvt Ltd
+Odin Healthcare Pvt Ltd,CHINA,202512,KG,USP,1000.0,12537049.0,12537.049,Buyer,Odin Healthcare Pvt Ltd
+Pretty Petals Pvt Ltd,CHINA,202507,KG,USP,7150.0,82542464.0,11544.400559440559,Buyer,Pretty Petals Pvt Ltd
+Pretty Petals Pvt Ltd,CHINA,202511,KG,USP,7200.0,84738600.0,11769.25,Buyer,Pretty Petals Pvt Ltd
+Ruskin Chemipharm,CHINA,202505,KG,IP,1500.0,17774324.0,11849.549333333332,Buyer,Ruskin Chemipharm
+Ruskin Chemipharm,CHINA,202507,KG,IP,1500.0,17853830.0,11902.553333333333,Buyer,Ruskin Chemipharm
+Ruskin Chemipharm,CHINA,202508,KG,IP,2000.0,24475452.0,12237.726,Buyer,Ruskin Chemipharm
+Ruskin Chemipharm,CHINA,202512,KG,IP,2000.0,25590710.0,12795.355,Buyer,Ruskin Chemipharm
+Sevantilal And Sons,CHINA,202505,KG,IP,3000.0,35201572.0,11733.857333333333,Buyer,Sevantilal And Sons
+Sevantilal And Sons,CHINA,202508,KG,IP,2000.0,24273668.0,12136.834,Buyer,Sevantilal And Sons
+Sevantilal And Sons,CHINA,202508,KG,USP,2000.0,24318764.0,12159.382,Buyer,Sevantilal And Sons
+Sevantilal And Sons,CHINA,202511,KG,IP,2000.0,25069812.0,12534.906,Buyer,Sevantilal And Sons
+Shah C J World Llp,CHINA,202506,KG,USP,1000.0,12145000.0,12145.0,Buyer,Shah C J World Llp
+Shah C J World Llp,CHINA,202511,KG,USP,2000.0,24856526.0,12428.263,Buyer,Shah C J World Llp
+Shah C J World Llp,CHINA,202512,KG,USP,1000.0,12957500.0,12957.5,Buyer,Shah C J World Llp
+Shah Tc Distribution Llp,CHINA,202504,KG,IP,14825.0,178141816.0,12016.311365935919,Buyer,Shah Tc Distribution Llp
+Shah Tc Distribution Llp,CHINA,202506,KG,IP,4275.0,51883124.0,12136.403274853801,Buyer,Shah Tc Distribution Llp
+Shah Tc Distribution Llp,CHINA,202507,KG,IP,2350.0,28359800.0,12068.0,Buyer,Shah Tc Distribution Llp
+Shriya Pharma And Surgical,CHINA,202507,KG,USP,2000.0,24584340.0,12292.17,Buyer,Shriya Pharma And Surgical
+Shriya Pharma And Surgical,CHINA,202602,KG,USP,2000.0,26118294.0,13059.147,Buyer,Shriya Pharma And Surgical
+Sun Pharmaceutical Industries Ltd,CHINA,202509,KG,IP,2550.0,31719450.0,12439.0,Buyer,Sun Pharmaceutical Industries Ltd
+Sun Rise Enterprises,CHINA,202504,KG,IP,3500.0,41611812.0,11889.089142857143,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202505,KG,IP,4800.0,56829622.0,11839.504583333333,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202505,KG,USP,2000.0,23447164.0,11723.582,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202506,KG,IP,3000.0,36037868.0,12012.622666666666,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202507,KG,IP,5500.0,65714656.0,11948.119272727272,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202507,KG,USP,2000.0,24551332.0,12275.666,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202508,KG,IP,7000.0,85337980.0,12191.14,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202601,KG,IP,10000.0,127706860.0,12770.686,Buyer,Sun Rise Enterprises
+Sun Rise Enterprises,CHINA,202602,KG,IP,2000.0,25540704.0,12770.352,Buyer,Sun Rise Enterprises
+Surmount Laboratories Ltd,CHINA,202602,KG,USP,1000.0,12971700.0,12971.7,Buyer,Surmount Laboratories Ltd
+Surmount Laboratories Pvt Ltd,CHINA,202505,KG,USP,1000.0,11845894.0,11845.894,Buyer,Surmount Laboratories Pvt Ltd
+Theon Pharmaceuticals Ltd,CHINA,202505,KG,USP,2000.0,23953999.5,11976.99975,Buyer,Theon Pharmaceuticals Ltd
+Theon Pharmaceuticals Ltd,CHINA,202506,KG,USP,2000.0,24290000.0,12145.0,Buyer,Theon Pharmaceuticals Ltd
+Theon Pharmaceuticals Ltd,CHINA,202508,KG,USP,2000.0,24808000.0,12404.0,Buyer,Theon Pharmaceuticals Ltd
+Theon Pharmaceuticals Ltd,CHINA,202511,KG,USP,2000.0,25059999.0,12529.9995,Buyer,Theon Pharmaceuticals Ltd
+Theon Pharmaceuticals Ltd,CHINA,202512,KG,USP,2000.0,25564001.0,12782.0005,Buyer,Theon Pharmaceuticals Ltd
+Unimax Laboratories,CHINA,202506,KG,USP,750.0,8845200.0,11793.6,Buyer,Unimax Laboratories
+Unimax Laboratories,CHINA,202507,KG,USP,850.0,10710357.0,12600.42,Buyer,Unimax Laboratories
+Unimax Laboratories,CHINA,202511,KG,USP,800.0,10078416.0,12598.02,Buyer,Unimax Laboratories
+Vincit Labs Pvt Ltd,CHINA,202511,KG,USP,1000.0,11421000.0,11421.0,Buyer,Vincit Labs Pvt Ltd
+Zim Laboratories Ltd,CHINA,202507,KG,USP,4000.0,48272000.0,12068.0,Buyer,Zim Laboratories Ltd
+Zim Laboratories Ltd,CHINA,202508,KG,USP,2500.0,29600900.0,11840.36,Buyer,Zim Laboratories Ltd
+Zim Laboratories Ltd,CHINA,202511,KG,USP,2000.0,24164999.5,12082.49975,Buyer,Zim Laboratories Ltd
+Zim Laboratories Ltd,CHINA,202512,KG,USP,4000.0,51198000.0,12799.5,Buyer,Zim Laboratories Ltd

@@ -1,11 +1,11 @@
-buyer,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
-Cipla Ltd,202501,KG,USP,12621.0,83545970.0,6619.599873227161,Buyer,Cipla Ltd
-Cipla Ltd,202507,KG,USP,1100.0,7016680.0,6378.8,Buyer,Cipla Ltd
-Cipla Ltd,202508,KG,USP,15367.0,95306136.0,6202.000130149021,Buyer,Cipla Ltd
-Cipla Ltd,202512,KG,USP,5050.0,34118810.0,6756.2,Buyer,Cipla Ltd
-Cipla Ltd,202602,KG,USP,12386.0,79202279.0,6394.500161472631,Buyer,Cipla Ltd
-Macleods Pharmaceuticals Ltd,202505,KG,USP,10000.0,63993416.0,6399.3416,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202506,KG,USP,20000.0,122713486.0,6135.6743,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202509,KG,USP,14718.0,92022582.0,6252.3836119037915,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202511,KG,USP,10462.0,65772969.0,6286.844675970177,Buyer,Macleods Pharmaceuticals Ltd
-Macleods Pharmaceuticals Ltd,202602,KG,USP,14550.05,93074796.0,6396.871213500985,Buyer,Macleods Pharmaceuticals Ltd
+buyer,COUNTRY,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
+Cipla Ltd,CHINA,202501,KG,USP,12621.0,83545970.0,6619.599873227161,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202507,KG,USP,1100.0,7016680.0,6378.8,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202508,KG,USP,15367.0,95306136.0,6202.000130149021,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202512,KG,USP,5050.0,34118810.0,6756.2,Buyer,Cipla Ltd
+Cipla Ltd,CHINA,202602,KG,USP,12386.0,79202279.0,6394.500161472631,Buyer,Cipla Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202505,KG,USP,10000.0,63993416.0,6399.3416,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202506,KG,USP,20000.0,122713486.0,6135.6743,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202509,KG,USP,14718.0,92022582.0,6252.3836119037915,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202511,KG,USP,10462.0,65772969.0,6286.844675970177,Buyer,Macleods Pharmaceuticals Ltd
+Macleods Pharmaceuticals Ltd,CHINA,202602,KG,USP,14550.05,93074796.0,6396.871213500985,Buyer,Macleods Pharmaceuticals Ltd

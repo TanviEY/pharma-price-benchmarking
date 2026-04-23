@@ -1,12 +1,9 @@
 supplier,yyyymm,uom,GRADE_SPEC,Sum_of_QTY,Sum_of_TOTAL_VALUE,Avg_PRICE,source,entity_name
 Brillant Pharmaceutical Ltd,202505,KG,IP,3000.0,35201572.0,11733.857333333333,Supplier,Brillant Pharmaceutical Ltd
-Brilliant Pharmaceutical Ltd,202507,KG,IP,15500.0,184347348.0,11893.37729032258,Supplier,Brilliant Pharmaceutical Ltd
-Brilliant Pharmaceutical Ltd,202507,KG,USP,7150.0,77843026.0,10887.136503496504,Supplier,Brilliant Pharmaceutical Ltd
+Brilliant Pharmaceutical Ltd,202507,KG,IP,13500.0,160542774.0,11892.057333333334,Supplier,Brilliant Pharmaceutical Ltd
 Brilliant Pharmaceutical Ltd,202508,KG,IP,13000.0,157867957.0,12143.689,Supplier,Brilliant Pharmaceutical Ltd
-Brilliant Pharmaceutical Ltd,202508,KG,USP,11000.0,119860164.0,10896.378545454545,Supplier,Brilliant Pharmaceutical Ltd
 Brilliant Pharmaceutical Ltd,202509,KG,EP,1000.0,11494300.0,11494.3,Supplier,Brilliant Pharmaceutical Ltd
 Brilliant Pharmaceutical Ltd,202509,KG,IP,4000.0,49152198.0,12288.0495,Supplier,Brilliant Pharmaceutical Ltd
-Brilliant Pharmaceutical Ltd,202509,KG,USP,6850.0,74309160.0,10848.052554744525,Supplier,Brilliant Pharmaceutical Ltd
 Brilliant Pharmaceutical Ltd,202512,KG,IP,2000.0,25558814.0,12779.407,Supplier,Brilliant Pharmaceutical Ltd
 Brilliant Pharmaceutical Ltd,202601,KG,IP,25000.0,319007220.0,12760.2888,Supplier,Brilliant Pharmaceutical Ltd
 Brilliant Pharmaceutical Ltd,202602,KG,IP,2000.0,25540704.0,12770.352,Supplier,Brilliant Pharmaceutical Ltd
@@ -25,18 +22,13 @@ Cspc Ouyi Pharmaceutical Co Ltd,202509,KG,USP,8891.4,122640217.0,13793.127853881
 Cspc Ouyi Pharmaceutical Co Ltd,202511,KG,USP,2000.0,24164999.5,12082.49975,Supplier,Cspc Ouyi Pharmaceutical Co Ltd
 Cspc Ouyi Pharmaceutical Co Ltd,202512,KG,USP,1000.0,12325500.0,12325.5,Supplier,Cspc Ouyi Pharmaceutical Co Ltd
 Cspc Ouyi Pharmaceutical Co Ltd,202601,KG,USP,1681.1,23407776.5,13924.083338290406,Supplier,Cspc Ouyi Pharmaceutical Co Ltd
-Hangzhou Dawn Ray Pharmaceutical Co Ltd,202504,KG,USP,1250.0,14719875.0,11775.9,Supplier,Hangzhou Dawn Ray Pharmaceutical Co Ltd
-Hangzhou Dawn Ray Pharmaceutical Co Ltd,202506,KG,USP,1000.0,11867400.5,11867.4005,Supplier,Hangzhou Dawn Ray Pharmaceutical Co Ltd
 Hangzhou Insure Chemical Co Ltd,202507,KG,USP,260.0,3148236.0,12108.6,Supplier,Hangzhou Insure Chemical Co Ltd
 Hebei Guolong Pharmaceutical Co Ltd,202505,KG,USP,4000.0,47855461.5,11963.865375,Supplier,Hebei Guolong Pharmaceutical Co Ltd
 Hebei Guolong Pharmaceutical Co Ltd,202506,KG,USP,4000.0,48713048.0,12178.262,Supplier,Hebei Guolong Pharmaceutical Co Ltd
-Hebei Guolong Pharmaceutical Co Ltd,202507,KG,IH,7150.0,82542464.0,11544.400559440559,Supplier,Hebei Guolong Pharmaceutical Co Ltd
-Hebei Guolong Pharmaceutical Co Ltd,202507,KG,USP,3850.0,46946985.0,12194.022077922078,Supplier,Hebei Guolong Pharmaceutical Co Ltd
-Hebei Guolong Pharmaceutical Co Ltd,202508,KG,IH,229.5,2846718.0,12404.0,Supplier,Hebei Guolong Pharmaceutical Co Ltd
-Hebei Guolong Pharmaceutical Co Ltd,202508,KG,USP,1770.5,21961282.0,12404.0,Supplier,Hebei Guolong Pharmaceutical Co Ltd
+Hebei Guolong Pharmaceutical Co Ltd,202507,KG,USP,11000.0,129489449.0,11771.76809090909,Supplier,Hebei Guolong Pharmaceutical Co Ltd
+Hebei Guolong Pharmaceutical Co Ltd,202508,KG,USP,2000.0,24808000.0,12404.0,Supplier,Hebei Guolong Pharmaceutical Co Ltd
 Hebei Guolong Pharmaceutical Co Ltd,202509,KG,USP,1000.0,12446053.0,12446.053,Supplier,Hebei Guolong Pharmaceutical Co Ltd
-Hebei Guolong Pharmaceutical Co Ltd,202511,KG,IH,7200.0,84738600.0,11769.25,Supplier,Hebei Guolong Pharmaceutical Co Ltd
-Hebei Guolong Pharmaceutical Co Ltd,202511,KG,USP,4800.0,59994941.0,12498.946041666666,Supplier,Hebei Guolong Pharmaceutical Co Ltd
+Hebei Guolong Pharmaceutical Co Ltd,202511,KG,USP,12000.0,144733541.0,12061.128416666666,Supplier,Hebei Guolong Pharmaceutical Co Ltd
 Hebei Guolong Pharmaceutical Co Ltd,202512,KG,USP,3000.0,38101050.0,12700.35,Supplier,Hebei Guolong Pharmaceutical Co Ltd
 Hebei Guolonh Pharmaceutical Co Ltd,202509,KG,USP,4000.0,49224000.0,12306.0,Supplier,Hebei Guolonh Pharmaceutical Co Ltd
 Hebei Sunco Biotech Co Ltd,202504,KG,IP,1000.0,11846510.0,11846.51,Supplier,Hebei Sunco Biotech Co Ltd
@@ -45,22 +37,10 @@ Hebei Sunco Biotech Co Ltd,202509,KG,IP,1000.0,12200914.0,12200.914,Supplier,Heb
 Heilongjiang Lianshun Biotech Co Ltd,202504,KG,USP,10000.0,109858889.0,10985.8889,Supplier,Heilongjiang Lianshun Biotech Co Ltd
 Heilongjiang Lianshun Biotech Co Ltd,202512,KG,USP,12000.0,132102000.0,11008.5,Supplier,Heilongjiang Lianshun Biotech Co Ltd
 Heilongjiang Lianshun Biotech Co Ltd,202601,KG,USP,12000.0,134611200.0,11217.6,Supplier,Heilongjiang Lianshun Biotech Co Ltd
-Hong Kong Osiris International Co Ltd,202505,KG,USP,5000.0,53371936.0,10674.3872,Supplier,Hong Kong Osiris International Co Ltd
-Hong Kong Osiris International Co Ltd,202506,KG,USP,6375.0,68564468.0,10755.210666666666,Supplier,Hong Kong Osiris International Co Ltd
-Hong Kong Xinsheng Medical Technology Co Ltd,202511,KG,USP,10350.0,115455624.0,11155.13275362319,Supplier,Hong Kong Xinsheng Medical Technology Co Ltd
-Hong Kong Xinsheng Medical Technology Co Ltd,202602,KG,USP,5000.0,57115558.0,11423.1116,Supplier,Hong Kong Xinsheng Medical Technology Co Ltd
-Hongkong Osiris International Co Ltd,202507,KG,USP,10000.0,106460376.0,10646.0376,Supplier,Hongkong Osiris International Co Ltd
+Hong Kong Xinsheng Medical Technology Co Ltd,202511,KG,USP,7000.0,78312498.0,11187.499714285714,Supplier,Hong Kong Xinsheng Medical Technology Co Ltd
 Longchem Internationaltrading Co Ltd,202504,KG,IP,14825.0,178141816.0,12016.311365935919,Supplier,Longchem Internationaltrading Co Ltd
-Mdnf,202505,KG,USP,3546.04,42892791.25,12095.969377107986,Supplier,Mdnf
-Ningxia Taiyicin Biotech Co Ltd,202504,KG,USP,5500.0,61606000.0,11201.09090909091,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202505,KG,USP,4000.0,42432990.0,10608.2475,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202506,KG,USP,1000.0,10693845.0,10693.845,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202507,KG,USP,1000.0,10693845.0,10693.845,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202508,KG,USP,2000.0,23603040.0,11801.52,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202509,KG,IH,609.0,7326735.0,12030.763546798029,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202509,KG,USP,1175.0,12847195.0,10933.782978723404,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202511,KG,USP,1000.0,11975100.0,11975.1,Supplier,Ningxia Taiyicin Biotech Co Ltd
-Ningxia Taiyicin Biotech Co Ltd,202601,KG,USP,1886.8,21369134.0,11325.59571761713,Supplier,Ningxia Taiyicin Biotech Co Ltd
+Ningxia Taiyicin Biotech Co Ltd,202504,KG,USP,3000.0,32595000.0,10865.0,Supplier,Ningxia Taiyicin Biotech Co Ltd
+Ningxia Taiyicin Biotech Co Ltd,202505,KG,USP,2000.0,21045300.0,10522.65,Supplier,Ningxia Taiyicin Biotech Co Ltd
 Sinobright Pharmaceutical Indusrtries Ltd,202504,KG,IP,1000.0,11938243.0,11938.243,Supplier,Sinobright Pharmaceutical Indusrtries Ltd
 Sinobright Pharmaceutical Indusrtries Ltd,202504,KG,USP,6000.0,67969350.0,11328.225,Supplier,Sinobright Pharmaceutical Indusrtries Ltd
 Sinobright Pharmaceutical Indusrtries Ltd,202505,KG,IP,9975.0,119579900.0,11987.959899749374,Supplier,Sinobright Pharmaceutical Indusrtries Ltd
@@ -73,11 +53,12 @@ Sinobright Pharmaceutical Industrie Ltd,202507,KG,IP,11200.0,133317780.0,11903.3
 Sinobright Pharmaceutical Industrie Ltd,202507,KG,USP,3125.0,44891876.0,14365.40032,Supplier,Sinobright Pharmaceutical Industrie Ltd
 Sinobright Pharmaceutical Industrie Ltd,202508,KG,IP,1627.38,19352152.0,11891.599995084121,Supplier,Sinobright Pharmaceutical Industrie Ltd
 Sinobright Pharmaceutical Industrieltd,202508,KG,IP,3000.0,36414600.0,12138.2,Supplier,Sinobright Pharmaceutical Industrieltd
-Sinobright Pharmaceutical Industries,202509,KG,IH,2500.0,30927500.0,12371.0,Supplier,Sinobright Pharmaceutical Industries
 Sinobright Pharmaceutical Industries,202509,KG,IP,10000.0,124390000.0,12439.0,Supplier,Sinobright Pharmaceutical Industries
+Sinobright Pharmaceutical Industries,202509,KG,USP,2500.0,30927500.0,12371.0,Supplier,Sinobright Pharmaceutical Industries
 Sinobright Pharmaceutical Industries Ltd,202505,KG,USP,500.0,5983200.0,11966.4,Supplier,Sinobright Pharmaceutical Industries Ltd
+Sinobright Pharmaceutical Industries Ltd,202509,KG,EP,1050.0,15690150.0,14943.0,Supplier,Sinobright Pharmaceutical Industries Ltd
 Sinobright Pharmaceutical Industries Ltd,202509,KG,IP,4550.0,56105450.0,12330.868131868132,Supplier,Sinobright Pharmaceutical Industries Ltd
-Sinobright Pharmaceutical Industries Ltd,202509,KG,USP,3950.0,57147102.0,14467.620759493671,Supplier,Sinobright Pharmaceutical Industries Ltd
+Sinobright Pharmaceutical Industries Ltd,202509,KG,USP,2900.0,41456952.0,14295.500689655173,Supplier,Sinobright Pharmaceutical Industries Ltd
 Sinobright Pharmaceutical Industries Ltd,202512,KG,IP,12000.0,152150710.0,12679.225833333334,Supplier,Sinobright Pharmaceutical Industries Ltd
 Sinobright Pharmaceutical Industries Ltd,202512,KG,USP,5175.0,69198614.0,13371.712850241545,Supplier,Sinobright Pharmaceutical Industries Ltd
 Sinobright Pharmaceutical Industries Ltd,202601,KG,IP,14000.0,179464800.0,12818.914285714285,Supplier,Sinobright Pharmaceutical Industries Ltd
@@ -85,13 +66,10 @@ Sinobright Pharmaceutical Industries Ltd,202601,KG,USP,4995.0,61324015.0,12277.0
 Sinobright Pharmaceutical Industries Ltd,202602,KG,USP,5800.0,65819796.0,11348.240689655173,Supplier,Sinobright Pharmaceutical Industries Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202504,KG,IP,250.0,3031000.0,12124.0,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202504,KG,USP,16000.0,191882000.0,11992.625,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
-Zhejiang Guobang Pharmaceutical Co Ltd,202505,KG,EP,700.0,8769600.0,12528.0,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202505,KG,IP,250.0,2994250.0,11977.0,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
-Zhejiang Guobang Pharmaceutical Co Ltd,202505,KG,USP,6670.3,77914825.0,11680.857682563003,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
+Zhejiang Guobang Pharmaceutical Co Ltd,202505,KG,USP,7370.3,86684425.0,11761.31568592866,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202506,KG,USP,4183.3,51113094.25,12218.366899337843,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
-Zhejiang Guobang Pharmaceutical Co Ltd,202507,KG,EP,700.0,8810200.0,12586.0,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
-Zhejiang Guobang Pharmaceutical Co Ltd,202507,KG,IH,250.0,3020687.25,12082.749,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
-Zhejiang Guobang Pharmaceutical Co Ltd,202507,KG,USP,25075.0,302782342.0,12075.068474576272,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
+Zhejiang Guobang Pharmaceutical Co Ltd,202507,KG,USP,26025.0,314613229.25,12088.8848895293,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202508,KG,USP,4500.0,55328764.0,12295.280888888889,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202509,KG,USP,11575.0,143959418.0,12437.098747300215,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceutical Co Ltd,202511,KG,USP,500.0,6297700.0,12595.4,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
@@ -101,11 +79,7 @@ Zhejiang Guobang Pharmaceutical Co Ltd,202601,KG,USP,10613.0,137658603.0,12970.7
 Zhejiang Guobang Pharmaceutical Co Ltd,202602,KG,USP,8300.0,108255013.0,13042.77265060241,Supplier,Zhejiang Guobang Pharmaceutical Co Ltd
 Zhejiang Guobang Pharmaceuticals Co Ltd,202509,KG,USP,1000.0,12460000.0,12460.0,Supplier,Zhejiang Guobang Pharmaceuticals Co Ltd
 Zhejiang Guobang Pharmeceutical Co Ltd,202512,KG,USP,600.0,7625400.0,12709.0,Supplier,Zhejiang Guobang Pharmeceutical Co Ltd
-Zhejiang Guobang Pharmeceutical Co Ltd,202601,KG,USP,600.0,7736160.25,12893.600416666666,Supplier,Zhejiang Guobang Pharmeceutical Co Ltd
+Zhejiang Guobang Pharmeceutical Co Ltd,202601,KG,USP,443.0,5711865.0,12893.60045146727,Supplier,Zhejiang Guobang Pharmeceutical Co Ltd
 Zhejiang Guobang Pharmeceutical Co Ltd,202602,KG,USP,500.0,6485850.0,12971.7,Supplier,Zhejiang Guobang Pharmeceutical Co Ltd
-Zhejiang Hengdian Apeloa Import And Export Co Ltd,202504,KG,USP,500.0,6004800.0,12009.6,Supplier,Zhejiang Hengdian Apeloa Import And Export Co Ltd
-Zhejiang Hengdian Apeloa Import And Export Co Ltd,202601,KG,USP,850.0,10542720.0,12403.2,Supplier,Zhejiang Hengdian Apeloa Import And Export Co Ltd
-Zhejiang Ueasy Business Service Co Ltd,202504,KG,USP,1000.0,10022400.0,10022.4,Supplier,Zhejiang Ueasy Business Service Co Ltd
 Zhejiang Ueasy Business Service Co Ltd,202506,KG,IP,4275.0,51883124.0,12136.403274853801,Supplier,Zhejiang Ueasy Business Service Co Ltd
-Zhejiang Ueasy Business Service Co Ltd,202506,KG,USP,1000.0,10264260.0,10264.26,Supplier,Zhejiang Ueasy Business Service Co Ltd
 Zhejiang Ueasy Business Service Co Ltd,202507,KG,IP,2350.0,28359800.0,12068.0,Supplier,Zhejiang Ueasy Business Service Co Ltd
