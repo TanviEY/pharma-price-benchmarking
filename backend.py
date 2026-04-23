@@ -391,7 +391,7 @@ def extract_yyyymm(date_col) -> str:
 
 def llm_normalize_cipla_grade_spec(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Normalize grade_spec column in Cipla GRN data using Gemini.
+    Normalize grade_spec column in Client A GRN data using Gemini.
     Known mapping: 'no set pharmacopoeia present (IH can be used -inhouse)' -> 'IH'
     Falls back to a simple replace if Gemini is unavailable.
     """
@@ -437,9 +437,9 @@ def llm_normalize_cipla_grade_spec(df: pd.DataFrame) -> pd.DataFrame:
 
 def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
     """
-    Apply outlier filters using EXIM avg qty and Cipla price baseline
+    Apply outlier filters using EXIM avg qty and Client A price baseline
     1. QTY >= 10% of EXIM Avg Qty
-    2. unit_price within Cipla Price ± 30%
+    2. unit_price within Client A Price ± 30%
     Returns: (filtered_df, outlier_df, stats_dict)
     """
     original_df = df.copy()
@@ -455,8 +455,11 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
     price_lower = cipla_price * 0.70  # -30%
     price_upper = cipla_price * 1.30  # +30%
 
-    # Calculate per-unit price
-    df['unit_price'] = df['TOTAL_VALUE'] / df['QTY']
+    # Use UNIT_PRICE column if already present (export data), else compute from TOTAL_VALUE/QTY
+    if 'UNIT_PRICE' in df.columns:
+        df['unit_price'] = pd.to_numeric(df['UNIT_PRICE'], errors='coerce').fillna(df['TOTAL_VALUE'] / df['QTY'])
+    else:
+        df['unit_price'] = df['TOTAL_VALUE'] / df['QTY']
     df = df[(df['unit_price'] >= price_lower) & (df['unit_price'] <= price_upper)]
 
     filtered_count = len(df)
@@ -465,7 +468,12 @@ def apply_outlier_filters(df: pd.DataFrame, cipla_baseline: Dict) -> Tuple[pd.Da
     # Build outlier df: rows in original that are NOT in filtered
     outlier_df = original_df[~original_df.index.isin(df.index)].copy()
     # Add reason columns for validation
-    outlier_df['unit_price'] = outlier_df['TOTAL_VALUE'] / outlier_df['QTY']
+    if 'UNIT_PRICE' in outlier_df.columns:
+        outlier_df['unit_price'] = pd.to_numeric(outlier_df['UNIT_PRICE'], errors='coerce').fillna(
+            outlier_df['TOTAL_VALUE'] / outlier_df['QTY']
+        )
+    else:
+        outlier_df['unit_price'] = outlier_df['TOTAL_VALUE'] / outlier_df['QTY']
     outlier_df['outlier_reason_qty'] = outlier_df['QTY'] < min_qty
     outlier_df['outlier_reason_price'] = ~((outlier_df['unit_price'] >= price_lower) & (outlier_df['unit_price'] <= price_upper))
 
@@ -537,6 +545,84 @@ def llm_explain_outliers(outlier_df: pd.DataFrame, filter_stats: dict) -> pd.Dat
     return df
 
 
+# Cache for LLM import duty results keyed by (molecule, country)
+_import_duty_cache: Dict[Tuple[str, str], float] = {}
+
+
+def llm_get_import_duty_pct(molecule: str, country: str) -> float:
+    """
+    Use LLM to determine the Indian import duty % for a pharmaceutical API
+    imported from a specific country into India.
+
+    Considers FTA rates (ASEAN, SAARC, South Korea, Japan, etc.) where applicable,
+    otherwise uses the MFN Basic Customs Duty rate including Social Welfare Surcharge.
+    Returns 0.0 if LLM is unavailable or country is unknown.
+    Results are cached per (molecule, country) pair.
+    """
+    country_clean = str(country).strip().upper()
+    cache_key = (molecule.lower().strip(), country_clean)
+    if cache_key in _import_duty_cache:
+        return _import_duty_cache[cache_key]
+
+    if not _LLM_AVAILABLE or country_clean in ('UNKNOWN', 'NAN', '', 'N/A', 'NONE'):
+        _import_duty_cache[cache_key] = 0.0
+        return 0.0
+
+    try:
+        prompt = (
+            f'You are an expert in Indian customs and pharmaceutical import regulations.\n'
+            f'What is the total effective import duty percentage applied in India for the '
+            f'pharmaceutical API "{molecule}" imported from "{country}"?\n\n'
+            f'Rules:\n'
+            f'- If a Free Trade Agreement (FTA) applies between India and "{country}" '
+            f'(e.g. ASEAN FTA, SAFTA, India-South Korea CEPA, India-Japan CEPA), '
+            f'use the applicable concessional FTA Basic Customs Duty (BCD) rate.\n'
+            f'- Otherwise use the MFN (Most Favored Nation) BCD rate for pharmaceutical APIs '
+            f'(HS Chapter 29 or 30 as applicable).\n'
+            f'- Add 10% Social Welfare Surcharge (SWS) on the BCD.\n'
+            f'- Do NOT include GST (it is a domestic tax, not a customs duty).\n'
+            f'- Return the final combined effective duty % as a single number.\n\n'
+            f'Respond ONLY with a valid JSON object (no markdown, no explanation outside JSON):\n'
+            f'{{"duty_pct": <number>, "basis": "<FTA|MFN>", "fta_name": "<name or empty string>", '
+            f'"notes": "<one sentence explanation>"}}'
+        )
+        text = _llm_generate(prompt)
+        json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            duty = float(parsed.get('duty_pct', 0))
+            duty = max(0.0, min(duty, 100.0))  # clamp to valid range
+            _import_duty_cache[cache_key] = duty
+            return duty
+    except Exception:
+        pass
+
+    _import_duty_cache[cache_key] = 0.0
+    return 0.0
+
+
+def apply_import_duty_to_buyer(buyer_agg: pd.DataFrame, molecule_name: str) -> pd.DataFrame:
+    """
+    Look up per-country import duty rates via LLM and add:
+      - import_duty_pct: duty % determined by LLM for that row's country of origin
+      - Sum_of_TOTAL_VALUE_with_duty: Sum_of_TOTAL_VALUE * (1 + import_duty_pct / 100)
+    """
+    buyer_agg = buyer_agg.copy()
+    if buyer_agg.empty:
+        buyer_agg['import_duty_pct'] = 0.0
+        buyer_agg['Sum_of_TOTAL_VALUE_with_duty'] = buyer_agg['Sum_of_TOTAL_VALUE']
+        return buyer_agg
+
+    countries = buyer_agg['COUNTRY'].fillna('UNKNOWN').unique()
+    duty_map = {c: llm_get_import_duty_pct(molecule_name, c) for c in countries}
+
+    buyer_agg['import_duty_pct'] = buyer_agg['COUNTRY'].fillna('UNKNOWN').map(duty_map).fillna(0.0)
+    buyer_agg['Sum_of_TOTAL_VALUE_with_duty'] = (
+        buyer_agg['Sum_of_TOTAL_VALUE'] * (1 + buyer_agg['import_duty_pct'] / 100)
+    )
+    return buyer_agg
+
+
 def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare molecule EXIM data - works for any molecule file"""
     df = df.copy()
@@ -558,9 +644,22 @@ def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
             item_col = col
             break
     if item_col:
-        df['GRADE_SPEC'] = df[item_col].apply(llm_extract_grade_spec)
+        df['GRADE_SPEC'] = df[item_col].apply(extract_grade_spec)
     else:
         df['GRADE_SPEC'] = 'USP'
+
+    # Find country of origin column
+    country_col = None
+    for col in ['COUNTRY', 'country', 'COUNTRY_OF_ORIGIN', 'CTY_OF_ORIGIN',
+                'ORIGIN_COUNTRY', 'Origin Country', 'ORIGIN', 'COUNTRY_OF_SUPPLY']:
+        if col in df.columns:
+            country_col = col
+            break
+    if country_col:
+        df['COUNTRY'] = df[country_col].astype(str).str.strip().str.upper()
+        df['COUNTRY'] = df['COUNTRY'].replace({'NAN': 'UNKNOWN', '': 'UNKNOWN', 'NONE': 'UNKNOWN'})
+    else:
+        df['COUNTRY'] = 'UNKNOWN'
 
     # Normalize UOM column
     if 'UQC' in df.columns:
@@ -577,10 +676,14 @@ def prepare_molecule_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def prepare_cipla_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepare Cipla GRN data"""
+    """Prepare Client A GRN data"""
     df = df.copy()
 
-    df = llm_normalize_cipla_grade_spec(df)
+    # Normalise only the known long-form inhouse value; keep all other grade_spec values as-is
+    if 'grade_spec' in df.columns:
+        df['grade_spec'] = df['grade_spec'].replace(
+            'no set pharmacopoeia present (IH can be used -inhouse)', 'IH'
+        )
 
     # Normalize UOM column
     if 'base_unit_of_measure' in df.columns:
@@ -600,7 +703,7 @@ def prepare_cipla_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_cipla_baseline(cipla_df: pd.DataFrame) -> Dict:
-    """Calculate baseline metrics from Cipla data"""
+    """Calculate baseline metrics from Client A data"""
     return {
         'avg_qty': cipla_df['quantity'].mean(),
         'avg_price': (cipla_df['actual_spend_inr'] / cipla_df['quantity']).mean(),
@@ -628,12 +731,29 @@ def aggregate_supplier(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def aggregate_buyer(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate data by Buyer (Importer)"""
-    return _aggregate_entity(df, 'IMPORTER', 'buyer', 'Buyer')
+    """Aggregate data by Buyer (Importer), including COUNTRY of origin if available."""
+    if 'COUNTRY' in df.columns:
+        agg_df = df.groupby(['IMPORTER', 'COUNTRY', 'yyyymm', 'UQC', 'GRADE_SPEC']).agg(
+            Sum_of_QTY=('QTY', 'sum'),
+            Sum_of_TOTAL_VALUE=('TOTAL_VALUE', 'sum')
+        ).reset_index()
+        agg_df.rename(columns={'IMPORTER': 'buyer', 'UQC': 'uom'}, inplace=True)
+    else:
+        agg_df = df.groupby(['IMPORTER', 'yyyymm', 'UQC', 'GRADE_SPEC']).agg(
+            Sum_of_QTY=('QTY', 'sum'),
+            Sum_of_TOTAL_VALUE=('TOTAL_VALUE', 'sum')
+        ).reset_index()
+        agg_df.rename(columns={'IMPORTER': 'buyer', 'UQC': 'uom'}, inplace=True)
+        agg_df['COUNTRY'] = 'UNKNOWN'
+
+    agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
+    agg_df['source'] = 'Buyer'
+    return agg_df[['buyer', 'COUNTRY', 'yyyymm', 'uom', 'GRADE_SPEC',
+                   'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]
 
 
 def aggregate_cipla(cipla_df: pd.DataFrame, molecule_name: str = 'unknown') -> pd.DataFrame:
-    """Aggregate Cipla data"""
+    """Aggregate Client A data"""
     agg_df = cipla_df.groupby(['yyyymm', 'base_unit_of_measure', 'grade_spec']).agg({
         'quantity': 'sum',
         'actual_spend_inr': 'sum'
@@ -647,10 +767,34 @@ def aggregate_cipla(cipla_df: pd.DataFrame, molecule_name: str = 'unknown') -> p
     }, inplace=True)
 
     agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
-    agg_df['source'] = 'Cipla'
+    agg_df['source'] = 'Client A'
     agg_df['api'] = molecule_name.upper()
 
     return agg_df[['api', 'yyyymm', 'uom', 'GRADE_SPEC', 'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']]
+
+
+def aggregate_cipla_by_vendor(cipla_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate Client A GRN data by vendor_name (and imported_domestic when present) and yyyymm
+    for per-vendor price trend.
+    Returns columns: vendor_name, [imported_domestic,] yyyymm, Sum_of_QTY, Sum_of_TOTAL_VALUE, Avg_PRICE
+    Falls back to an empty DataFrame if vendor_name column is absent.
+    """
+    if 'vendor_name' not in cipla_df.columns:
+        return pd.DataFrame()
+
+    group_cols = ['vendor_name']
+    if 'imported_domestic' in cipla_df.columns:
+        group_cols.append('imported_domestic')
+    group_cols.append('yyyymm')
+
+    agg_df = cipla_df.groupby(group_cols).agg(
+        Sum_of_QTY=('quantity', 'sum'),
+        Sum_of_TOTAL_VALUE=('actual_spend_inr', 'sum')
+    ).reset_index()
+
+    agg_df['Avg_PRICE'] = agg_df['Sum_of_TOTAL_VALUE'] / agg_df['Sum_of_QTY']
+    return agg_df[group_cols + ['Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE']]
 
 # ── File Discovery ─────────────────────────────────────────────────────────────
 
@@ -733,13 +877,14 @@ def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
     Prepare export file data.
 
     Export files have columns (case-insensitive):
-      - Date           → yyyymm (format: 15-May-25)
-      - product name   → ITEM
-      - quantity       → QTY
-      - unit           → UQC
-      - FOB(INR)       → TOTAL_VALUE  (actual total transaction value, Free On Board in INR)
+      - Date             → yyyymm (format: 15-May-25)
+      - product name     → ITEM
+      - quantity         → QTY
+      - unit             → UQC
+      - FOB(INR)         → TOTAL_VALUE  (actual total transaction value, Free On Board in INR)
+      - Item Rate(INR)   → UNIT_PRICE   (per-unit price in INR; used for price outlier filter)
 
-    Returns a clean DataFrame with columns: yyyymm, ITEM, QTY, UQC, TOTAL_VALUE, GRADE_SPEC
+    Returns a clean DataFrame with columns: yyyymm, ITEM, QTY, UQC, TOTAL_VALUE, UNIT_PRICE, GRADE_SPEC
     """
     if df.empty:
         return pd.DataFrame()
@@ -760,6 +905,7 @@ def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
     qty_src = _find_col('quantity', 'qty')
     unit_src = _find_col('unit', 'uqc')
     value_src = _find_col('fob(inr)', 'fob (inr)', 'fob_inr', 'fob_(inr)', 'fob value inr', 'fob value (inr)')
+    unit_price_src = _find_col('item rate(inr)', 'item rate (inr)', 'item_rate_inr', 'item rate')
 
     if date_src is None:
         raise ValueError(f"No Date column found in export file. Available columns: {list(df.columns)}")
@@ -773,8 +919,14 @@ def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
     df['UQC'] = df[unit_src] if unit_src else ''
     df['TOTAL_VALUE'] = pd.to_numeric(df[value_src], errors='coerce') if value_src else np.nan
 
+    # Per-unit price from Item Rate(INR); fall back to TOTAL_VALUE/QTY if column absent
+    if unit_price_src:
+        df['UNIT_PRICE'] = pd.to_numeric(df[unit_price_src], errors='coerce')
+    else:
+        df['UNIT_PRICE'] = df['TOTAL_VALUE'] / df['QTY']
+
     # Extract grade spec from product name
-    df['GRADE_SPEC'] = df['ITEM'].apply(llm_extract_grade_spec)
+    df['GRADE_SPEC'] = df['ITEM'].apply(extract_grade_spec)
 
     # Normalize UOM
     df = llm_normalize_uom(df, 'UQC')
@@ -782,7 +934,7 @@ def prepare_export_data(df: pd.DataFrame) -> pd.DataFrame:
     # Drop rows with missing critical values
     df = df.dropna(subset=['yyyymm', 'QTY', 'TOTAL_VALUE'])
 
-    return df[['yyyymm', 'ITEM', 'QTY', 'UQC', 'TOTAL_VALUE', 'GRADE_SPEC']].reset_index(drop=True)
+    return df[['yyyymm', 'ITEM', 'QTY', 'UQC', 'TOTAL_VALUE', 'UNIT_PRICE', 'GRADE_SPEC']].reset_index(drop=True)
 
 
 def calculate_export_avg_price(export_df: pd.DataFrame) -> float:
@@ -800,7 +952,7 @@ def calculate_export_avg_price(export_df: pd.DataFrame) -> float:
 
 
 def discover_cipla_file(data_dir: str) -> Optional[str]:
-    """Discover Cipla GRN file"""
+    """Discover Client A GRN file"""
     cipla_patterns = ["cipla_api_grn*.xlsx", "cipla_grn*.xlsx"]
     data_path = Path(data_dir)
 
@@ -945,6 +1097,132 @@ def get_aliases(molecule: str, molecule_mapping: Dict) -> List[str]:
         return molecule_mapping["molecules"][molecule].get("aliases", [])
     return []
 
+# ── USP DMF Validation ────────────────────────────────────────────────────────
+
+
+def discover_usp_check_file(data_dir: str) -> Optional[str]:
+    """Find USP_Check.xlsx (case-insensitive) in the raw sub-folder of data_dir."""
+    data_path = Path(data_dir)
+    for sub in [data_path / "raw", data_path]:
+        for f in sub.iterdir() if sub.exists() else []:
+            if f.is_file() and f.suffix.lower() in (".xlsx", ".xls") and "usp" in f.name.lower() and "check" in f.name.lower():
+                return str(f)
+    return None
+
+
+def load_usp_approved_holders(usp_check_file: str, molecule_name: str) -> set:
+    """
+    Load USP_Check.xlsx (header row 1), filter STATUS='A', then return the set of
+    HOLDER names (uppercased + stripped) whose SUBJECT contains the molecule name.
+    Returns an empty set if the file cannot be loaded or no matches found.
+    """
+    try:
+        df = pd.read_excel(usp_check_file, header=1)
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        if "STATUS" not in df.columns or "HOLDER" not in df.columns or "SUBJECT" not in df.columns:
+            return set()
+        active = df[df["STATUS"].astype(str).str.strip().str.upper() == "A"]
+        mol_key = molecule_name.lower().replace("_", " ")
+        matched = active[active["SUBJECT"].astype(str).str.lower().str.contains(mol_key, na=False)]
+        return {str(h).strip().upper() for h in matched["HOLDER"].dropna()}
+    except Exception:
+        return set()
+
+
+def _usp_name_matches(entity_name: str, approved_holders: set, threshold: int = 82) -> bool:
+    """
+    Return True if entity_name is found in approved_holders.
+
+    Strategy (first hit wins):
+    1. Case-insensitive exact match after stripping punctuation.
+    2. token_set_ratio  — handles partial-name subsets, e.g. "Desano Ltd."
+       inside "SHANGHAI DESANO CHEMICAL PHARMACEUTICAL CO LTD".
+    3. token_sort_ratio — handles reordered words at similar lengths.
+    """
+    if not entity_name or not approved_holders:
+        return False
+
+    # Normalise: uppercase, replace punctuation with space, collapse whitespace
+    _norm = lambda s: re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', ' ', str(s).upper())).strip()
+
+    normalized = _norm(entity_name)
+    norm_holders = {_norm(h): h for h in approved_holders}
+
+    # 1. Exact match after normalisation
+    if normalized in norm_holders:
+        return True
+
+    # 2 & 3. Fuzzy matching — token_set_ratio first (subset-tolerant)
+    for h_norm in norm_holders:
+        if fuzz.token_set_ratio(normalized, h_norm) >= threshold:
+            return True
+        if fuzz.token_sort_ratio(normalized, h_norm) >= threshold:
+            return True
+
+    return False
+
+
+def filter_usp_grade_by_dmf(
+    df: pd.DataFrame,
+    approved_holders: set,
+    molecule_name: str,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    For rows where GRADE_SPEC == 'USP', validate the supplier (Supp_Name) or buyer
+    (IMPORTER) name against the approved_holders set from USP_Check.
+    Rows that do NOT match any approved holder are moved to the outlier DataFrame.
+
+    Returns: (validated_df, usp_outlier_df)
+    usp_outlier_df is schema-compatible with the main outlier_df
+    (has outlier_reason_qty, outlier_reason_price, outlier_reason_item,
+    outlier_reason_usp, outlier_reason_text columns).
+    """
+    if df.empty or not approved_holders or "GRADE_SPEC" not in df.columns:
+        return df, pd.DataFrame()
+
+    usp_mask = df["GRADE_SPEC"].astype(str).str.strip().str.upper() == "USP"
+    usp_rows = df[usp_mask].copy()
+    non_usp_rows = df[~usp_mask].copy()
+
+    if usp_rows.empty:
+        return df, pd.DataFrame()
+
+    def _is_valid(row):
+        for col in ["Supp_Name", "IMPORTER"]:
+            if col in row and pd.notna(row[col]):
+                if _usp_name_matches(str(row[col]), approved_holders):
+                    return True
+        return False
+
+    valid_mask = usp_rows.apply(_is_valid, axis=1)
+    valid_usp = usp_rows[valid_mask]
+    invalid_usp = usp_rows[~valid_mask].copy()
+
+    if invalid_usp.empty:
+        return df, pd.DataFrame()
+
+    # Build human-readable reason
+    def _reason(row):
+        names = []
+        for col in ["Supp_Name", "IMPORTER"]:
+            if col in row and pd.notna(row[col]) and str(row[col]).strip():
+                names.append(str(row[col]).strip())
+        entity_str = " / ".join(names) if names else "Unknown"
+        return (
+            f"USP grade unvalidated: '{entity_str}' not found in active FDA DMF "
+            f"holder list for {molecule_name}"
+        )
+
+    invalid_usp["outlier_reason_usp"] = invalid_usp.apply(_reason, axis=1)
+    invalid_usp["outlier_reason_text"] = invalid_usp["outlier_reason_usp"]
+    invalid_usp["outlier_reason_qty"] = False
+    invalid_usp["outlier_reason_price"] = False
+    invalid_usp["outlier_reason_item"] = ""
+
+    validated_df = pd.concat([non_usp_rows, valid_usp], ignore_index=True)
+    return validated_df, invalid_usp
+
+
 # ── Pipeline ───────────────────────────────────────────────────────────────────
 
 
@@ -1013,26 +1291,49 @@ def run_processing_pipeline(molecule_name: str, data_dir: str) -> Dict:
         else:
             item_outlier_df = pd.DataFrame()
 
+        # Step 3c: USP DMF validation — remove rows claiming USP grade whose
+        # supplier/buyer is not an active FDA DMF holder for this molecule
+        usp_check_file = discover_usp_check_file(data_dir)
+        usp_outlier_df = pd.DataFrame()
+        if usp_check_file:
+            usp_approved = load_usp_approved_holders(usp_check_file, molecule_name)
+            if usp_approved:
+                molecule_df, usp_outlier_df = filter_usp_grade_by_dmf(
+                    molecule_df, usp_approved, molecule_name
+                )
+
         # Step 4: Calculate baselines
         cipla_baseline = calculate_cipla_baseline(cipla_df)
 
         # Step 5: Filter outliers (returns tuple of (filtered_df, outlier_df, stats))
         molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
 
-        # Merge item-irrelevant outliers into the main outlier dataframe
-        if len(item_outlier_df) > 0:
-            outlier_df = pd.concat([item_outlier_df, outlier_df], ignore_index=True)
+        # Merge item-irrelevant and USP-unvalidated outliers into the main outlier dataframe
+        extra_outliers = [df for df in [item_outlier_df, usp_outlier_df] if len(df) > 0]
+        if extra_outliers:
+            outlier_df = pd.concat(extra_outliers + [outlier_df], ignore_index=True)
 
         filter_stats['item_outlier_count'] = len(item_outlier_df)
+        filter_stats['usp_outlier_count'] = len(usp_outlier_df)
 
         # Step 6: Aggregate
         supplier_agg = aggregate_supplier(molecule_df_filtered)
         buyer_agg = aggregate_buyer(molecule_df_filtered)
         cipla_agg = aggregate_cipla(cipla_df, molecule_name)
 
+        # Step 6b: Apply per-country import duty to buyer data via LLM
+        buyer_agg = apply_import_duty_to_buyer(buyer_agg, molecule_name)
+
+        # Add duty-adjusted value defaults to supplier and cipla for schema consistency
+        supplier_agg['import_duty_pct'] = 0.0
+        supplier_agg['Sum_of_TOTAL_VALUE_with_duty'] = supplier_agg['Sum_of_TOTAL_VALUE']
+        cipla_agg['import_duty_pct'] = 0.0
+        cipla_agg['Sum_of_TOTAL_VALUE_with_duty'] = cipla_agg['Sum_of_TOTAL_VALUE']
+
         # Step 7: Build consolidated DataFrame
         shared_cols = ['entity_name', 'yyyymm', 'uom', 'GRADE_SPEC',
-                       'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Avg_PRICE', 'source']
+                       'Sum_of_QTY', 'Sum_of_TOTAL_VALUE', 'Sum_of_TOTAL_VALUE_with_duty',
+                       'import_duty_pct', 'Avg_PRICE', 'source']
         supplier_agg['entity_name'] = supplier_agg['supplier']
         buyer_agg['entity_name'] = buyer_agg['buyer']
         cipla_agg['entity_name'] = cipla_agg['api']
