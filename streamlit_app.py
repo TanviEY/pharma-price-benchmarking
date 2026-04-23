@@ -16,13 +16,14 @@ from backend import (
     load_cipla_grn, load_multiple_files,
     extract_grade_spec, extract_yyyymm,
     apply_outlier_filters, prepare_molecule_data, prepare_cipla_data, llm_filter_item_relevance,
-    calculate_cipla_baseline, aggregate_supplier, aggregate_buyer, aggregate_cipla,
+    calculate_cipla_baseline, aggregate_supplier, aggregate_buyer, aggregate_cipla, aggregate_cipla_by_vendor,
     discover_molecule_files, discover_cipla_file, get_available_molecules, get_molecule_file_info,
     match_molecule_input, get_suggestions, get_top_match, get_aliases,
     run_processing_pipeline,
     format_currency, format_percentage, calculate_price_variance,
     get_grade_spec_options, get_uom_options, get_date_range, filter_dataframe,
     discover_export_files, prepare_export_data,
+    discover_usp_check_file, load_usp_approved_holders, filter_usp_grade_by_dmf,
     _llm_generate, _LLM_AVAILABLE, _LLM_PROVIDER,
 )
 
@@ -89,6 +90,16 @@ def _llm_analysis(prompt: str) -> str:
 AVATAR_COLORS = [
     "#3b82f6", "#16a34a", "#7c3aed", "#d97706",
     "#0891b2", "#dc2626", "#0d9488",
+]
+
+# Larger, more varied palette used specifically for the dot chart
+DOT_CHART_COLORS = [
+    "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231",
+    "#911eb4", "#42d4f4", "#f032e6", "#bfef45", "#fabed4",
+    "#469990", "#dcbeff", "#9a6324", "#fffac8", "#800000",
+    "#aaffc3", "#808000", "#ffd8b1", "#000075", "#a9a9a9",
+    "#e05c5c", "#5cb8e4", "#f4a261", "#2a9d8f", "#e76f51",
+    "#264653", "#a8dadc", "#457b9d", "#e9c46a", "#6d6875",
 ]
 
 
@@ -413,7 +424,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   width:170px; font-size:0.78rem; color:var(--t1); font-weight:500;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0;
 }
-.pi-bar-label.cipla { font-weight:700; color:var(--blue-dk); }
+.pi-bar-label.client-a { font-weight:700; color:var(--blue-dk); }
 .pi-bar-track {
   flex:1; height:26px; background:var(--subtle); border-radius:4px;
   overflow:hidden; position:relative;
@@ -441,7 +452,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
   padding:0.45rem 0.65rem; color:var(--t1);
   border-bottom:1px solid var(--border); vertical-align:middle;
 }
-.pi-comp-table tr.cipla-row td { background:var(--blue-lt) !important; }
+.pi-comp-table tr.client-a-row td { background:var(--blue-lt) !important; }
 .pi-comp-table tr:hover td { background:var(--subtle); }
 .pi-av {
   width:30px; height:30px; border-radius:50%;
@@ -470,7 +481,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
 .badge-green { background:var(--green-lt); color:var(--green); }
 .badge-amber { background:var(--amber-lt); color:var(--amber); }
 .badge-red   { background:var(--red-lt); color:var(--red); }
-.badge-cyan  { background:#ecfeff; color:var(--cyan); }
+.badge-cyan   { background:#ecfeff; color:var(--cyan); }
+.badge-purple { background:#f5f3ff; color:#7c3aed; }
 
 /* ── INFO BANNER ── */
 .pi-info-banner {
@@ -570,7 +582,7 @@ st.markdown("""
   </div>
   <div class="pi-nav-right">
     <span class="pi-pill-live">● Live</span>
-    <span class="pi-pill-cipla">Cipla Internal</span>
+    <span class="pi-pill-cipla">Client A Internal</span>
     <span class="pi-avatar">CI</span>
   </div>
 </div>
@@ -600,7 +612,7 @@ with st.container():
         )
     with sc_btn:
         st.markdown('<div class="pi-analyse-btn">', unsafe_allow_html=True)
-        analyse_clicked = st.button("Analyse", key="hero_analyse_btn")
+        analyse_clicked = st.button("Analyse", key="hero_analyse_btn", help="Run or re-run the full pipeline for this molecule")
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -647,6 +659,8 @@ if (analyse_clicked or _enter_triggered) and hero_mol_input.strip():
             unsafe_allow_html=True,
         )
 
+
+
 # ─── MAIN CONTENT ─────────────────────────────────────────────────────────────
 if st.session_state.selected_molecule:
     selected_mol = st.session_state.selected_molecule
@@ -682,11 +696,11 @@ if st.session_state.selected_molecule:
                 st.stop()
             if not cipla_file:
                 st.markdown(
-                    '<div class="pi-info-banner">❌ Cipla GRN file not found.</div>',
+                    '<div class="pi-info-banner">❌ Client A GRN file not found.</div>',
                     unsafe_allow_html=True,
                 )
                 st.stop()
-            _s1_result = f"{len(mol_files)} EXIM file(s) found, Cipla GRN located"
+            _s1_result = f"{len(mol_files)} EXIM file(s) found, Client A GRN located"
             _narr1 = _gemini_narrate(
                 f"Discovering files for {selected_mol}",
                 _s1_result,
@@ -697,15 +711,15 @@ if st.session_state.selected_molecule:
             _render_log(_log_lines)
 
             # ── Step 2: Load data ──────────────────────────────────────────────
-            _log_lines.append(f'<span class="pi-log-step-ok">▶ Step 2/8 — Loading {len(mol_files)} EXIM files + Cipla GRN file…</span>')
+            _log_lines.append(f'<span class="pi-log-step-ok">▶ Step 2/8 — Loading {len(mol_files)} EXIM files + Client A GRN file…</span>')
             _render_log(_log_lines)
             molecule_df_raw = load_multiple_files(mol_files)
             api_filter = MOLECULE_MAPPING["molecules"][selected_mol]["cipla_api_filter"]
             cipla_df_raw = load_cipla_grn(cipla_file, api_filter)
             raw_record_count = len(molecule_df_raw)
-            _s2_result = f"{raw_record_count} raw EXIM rows + {len(cipla_df_raw)} Cipla rows loaded"
+            _s2_result = f"{raw_record_count} raw EXIM rows + {len(cipla_df_raw)} Client A rows loaded"
             _narr2 = _gemini_narrate(
-                f"Loading {len(mol_files)} EXIM files + Cipla GRN file",
+                f"Loading {len(mol_files)} EXIM files + Client A GRN file",
                 _s2_result,
             )
             _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 2 done — {_s2_result}</span>')
@@ -748,36 +762,70 @@ if st.session_state.selected_molecule:
                 None,
             )
             if _item_col and _LLM_AVAILABLE:
-                _log_lines.append('<span class="pi-log-step-ok">▶ Step 3c — LLM item-relevance check…</span>')
+                _log_lines.append('<span class="pi-log-step-ok">▶ Step 3c — LLM item-relevance check (import)…</span>')
                 _render_log(_log_lines)
                 molecule_df, _item_outlier_df = llm_filter_item_relevance(molecule_df, selected_mol, _item_col)
                 _item_removed = len(_item_outlier_df)
                 _log_lines.append(
-                    f'<span class="pi-log-step-ok">✔ Step 3c done — {_item_removed} item-irrelevant rows flagged as outliers</span>'
+                    f'<span class="pi-log-step-ok">✔ Step 3c done — {_item_removed} item-irrelevant rows flagged as outliers (import)</span>'
                 )
                 _render_log(_log_lines)
             else:
                 _item_outlier_df = pd.DataFrame()
 
+            # ── Step 3d: LLM item-relevance filter for export ──────────────────
+            _export_item_outlier_df = pd.DataFrame()
+            if not export_df.empty and 'ITEM' in export_df.columns and _LLM_AVAILABLE:
+                _log_lines.append('<span class="pi-log-step-ok">▶ Step 3d — LLM item-relevance check (export)…</span>')
+                _render_log(_log_lines)
+                export_df, _export_item_outlier_df = llm_filter_item_relevance(export_df, selected_mol, 'ITEM')
+                _exp_item_removed = len(_export_item_outlier_df)
+                _log_lines.append(
+                    f'<span class="pi-log-step-ok">✔ Step 3d done — {_exp_item_removed} item-irrelevant rows removed from export data</span>'
+                )
+                _render_log(_log_lines)
+
+            # ── Step 3e: USP DMF validation ────────────────────────────────────
+            _usp_outlier_df = pd.DataFrame()
+            _usp_check_file = discover_usp_check_file("data/raw")
+            if _usp_check_file:
+                _log_lines.append('<span class="pi-log-step-ok">▶ Step 3e — USP DMF holder validation…</span>')
+                _render_log(_log_lines)
+                _usp_approved = load_usp_approved_holders(_usp_check_file, selected_mol)
+                if _usp_approved:
+                    molecule_df, _usp_outlier_df = filter_usp_grade_by_dmf(
+                        molecule_df, _usp_approved, selected_mol
+                    )
+                    _usp_removed = len(_usp_outlier_df)
+                    _log_lines.append(
+                        f'<span class="pi-log-step-ok">✔ Step 3e done — {_usp_removed} USP-grade rows flagged as unvalidated '
+                        f'({len(_usp_approved)} active DMF holders found for {selected_mol})</span>'
+                    )
+                else:
+                    _log_lines.append(
+                        f'<span class="pi-log-step-warn">  ↳ Step 3e — No active DMF holders found for {selected_mol} in USP_Check; skipping USP validation</span>'
+                    )
+                _render_log(_log_lines)
+
             # ── Step 4: Prepare Cipla data ─────────────────────────────────────
-            _log_lines.append('<span class="pi-log-step-ok">▶ Step 4/8 — Preparing Cipla data…</span>')
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 4/8 — Preparing Client A data…</span>')
             _render_log(_log_lines)
             cipla_df = prepare_cipla_data(cipla_df_raw)
-            _s4_result = f"{len(cipla_df)} Cipla rows cleaned and ready"
-            _narr4 = _gemini_narrate("Preparing Cipla data", _s4_result)
+            _s4_result = f"{len(cipla_df)} Client A rows cleaned and ready"
+            _narr4 = _gemini_narrate("Preparing Client A data", _s4_result)
             _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 4 done — {_s4_result}</span>')
             if _narr4:
                 _log_lines.append(f'<span class="pi-log-narration">💬 {_narr4}</span>')
             _render_log(_log_lines)
 
             # ── Step 5: Calculate Cipla baseline ──────────────────────────────
-            _log_lines.append('<span class="pi-log-step-ok">▶ Step 5/8 — Calculating Cipla price baseline…</span>')
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 5/8 — Calculating Client A price baseline…</span>')
             _render_log(_log_lines)
             cipla_baseline = calculate_cipla_baseline(cipla_df)
             _avg_price = cipla_baseline["avg_price"]
             _s5_result = f"avg price ₹{_avg_price:,.2f}/unit, {cipla_baseline['total_records']} records"
             _narr5 = _gemini_narrate(
-                f"Calculating Cipla price baseline (avg price: ₹{_avg_price:.2f}/unit)",
+                f"Calculating Client A price baseline (avg price: ₹{_avg_price:.2f}/unit)",
                 _s5_result,
             )
             _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 5 done — {_s5_result}</span>')
@@ -789,9 +837,25 @@ if st.session_state.selected_molecule:
             _log_lines.append('<span class="pi-log-step-ok">▶ Step 6/8 — Applying outlier filters (qty threshold + price ±30%)…</span>')
             _render_log(_log_lines)
             molecule_df_filtered, outlier_df, filter_stats = apply_outlier_filters(molecule_df, cipla_baseline)
-            # Merge LLM item-relevance outliers into the outlier table
-            if len(_item_outlier_df) > 0:
-                outlier_df = pd.concat([_item_outlier_df, outlier_df], ignore_index=True)
+            # Merge item-relevance and USP-unvalidated outliers into the outlier table
+            _extra_outliers = [_df for _df in [_item_outlier_df, _usp_outlier_df] if len(_df) > 0]
+            if _extra_outliers:
+                outlier_df = pd.concat(_extra_outliers + [outlier_df], ignore_index=True)
+
+            # ── Step 6b: Apply same outlier filters to export data ─────────────
+            if not export_df.empty:
+                export_df, _export_qty_price_outlier_df, _export_filter_stats = apply_outlier_filters(export_df, cipla_baseline)
+                if len(_export_item_outlier_df) > 0:
+                    _export_qty_price_outlier_df = pd.concat(
+                        [_export_item_outlier_df, _export_qty_price_outlier_df], ignore_index=True
+                    )
+                _exp_removed = _export_filter_stats["removed_count"]
+                _log_lines.append(
+                    f'<span class="pi-log-step-ok">✔ Step 6b done — {_exp_removed} outlier rows removed from export data '
+                    f'({_export_filter_stats["removal_percentage"]:.1f}%), '
+                    f'{_export_filter_stats["filtered_count"]} rows kept</span>'
+                )
+                _render_log(_log_lines)
             _removed = filter_stats["removed_count"]
             _pct = filter_stats["removal_percentage"]
             _s6_result = f"{_removed} outlier rows removed ({_pct:.1f}%), {filter_stats['filtered_count']} rows kept"
@@ -805,7 +869,7 @@ if st.session_state.selected_molecule:
             _render_log(_log_lines)
 
             # ── Step 7: Aggregate ──────────────────────────────────────────────
-            _log_lines.append('<span class="pi-log-step-ok">▶ Step 7/8 — Aggregating by Supplier, Buyer, Cipla…</span>')
+            _log_lines.append('<span class="pi-log-step-ok">▶ Step 7/8 — Aggregating by Supplier, Buyer, Client A…</span>')
             _render_log(_log_lines)
             supplier_agg = aggregate_supplier(molecule_df_filtered)
             buyer_agg = aggregate_buyer(molecule_df_filtered)
@@ -813,9 +877,9 @@ if st.session_state.selected_molecule:
             _s7_result = (
                 f"{len(supplier_agg)} supplier rows, "
                 f"{len(buyer_agg)} buyer rows, "
-                f"{len(cipla_agg)} Cipla rows"
+                f"{len(cipla_agg)} Client A rows"
             )
-            _narr7 = _gemini_narrate("Aggregating by Supplier, Buyer, Cipla", _s7_result)
+            _narr7 = _gemini_narrate("Aggregating by Supplier, Buyer, Client A", _s7_result)
             _log_lines.append(f'<span class="pi-log-step-ok">✔ Step 7 done — {_s7_result}</span>')
             if _narr7:
                 _log_lines.append(f'<span class="pi-log-narration">💬 {_narr7}</span>')
@@ -880,9 +944,11 @@ if st.session_state.selected_molecule:
                     "supplier": supplier_agg,
                     "buyer": buyer_agg,
                     "cipla": cipla_agg,
+                    "cipla_by_vendor": aggregate_cipla_by_vendor(cipla_df),
                     "consolidated": consolidated,
                     "outlier": outlier_df,
                     "export": export_df,
+                    "export_outlier": _export_qty_price_outlier_df if not export_df.empty else pd.DataFrame(),
                 },
             }
             st.session_state.pipeline_clean_time = _clean_time
@@ -905,6 +971,8 @@ if st.session_state.selected_molecule:
     consolidated_df = result["data"]["consolidated"]
     outlier_df_cached = result["data"]["outlier"]
     export_df_cached = result["data"].get("export", pd.DataFrame())
+    export_outlier_df_cached = result["data"].get("export_outlier", pd.DataFrame())
+    cipla_vendor_df_cached = result["data"].get("cipla_by_vendor", pd.DataFrame())
     meta = result["metadata"]
     filter_stats_cached = meta["filter_stats"]
     cipla_baseline_cached = meta["cipla_baseline"]
@@ -912,10 +980,18 @@ if st.session_state.selected_molecule:
     # Metadata (derived from full consolidated_df)
     mol_cfg = MOLECULE_MAPPING["molecules"].get(selected_mol, {})
     cas_code = mol_cfg.get("cipla_api_filter", selected_mol.upper())
-    import_duty_pct = mol_cfg.get("import_duty_pct", 0)
-    import_duty_mult = 1 + import_duty_pct / 100
+    # import_duty_mult kept as a fallback for when Sum_of_TOTAL_VALUE_with_duty is absent
+    _fallback_duty_pct = mol_cfg.get("import_duty_pct", 0)
+    _fallback_duty_mult = 1 + _fallback_duty_pct / 100
+    _has_duty_col = "Sum_of_TOTAL_VALUE_with_duty" in consolidated_df.columns
+
+    def _buyer_total_value_col(df):
+        """Return the duty-adjusted total value column if available, else apply fallback multiplier."""
+        if _has_duty_col and "Sum_of_TOTAL_VALUE_with_duty" in df.columns:
+            return df["Sum_of_TOTAL_VALUE_with_duty"]
+        return df["Sum_of_TOTAL_VALUE"] * _fallback_duty_mult
     uom = consolidated_df["uom"].mode()[0] if len(consolidated_df) > 0 else "KG"
-    grade_series = consolidated_df[consolidated_df["source"] == "Cipla"]["GRADE_SPEC"]
+    grade_series = consolidated_df[consolidated_df["source"] == "Client A"]["GRADE_SPEC"]
     grade = grade_series.mode()[0] if len(grade_series) > 0 else "USP"
 
     # Build month/UOM/grade options from full consolidated_df
@@ -942,7 +1018,7 @@ if st.session_state.selected_molecule:
 
         st.caption(f"⏱ Pipeline completed in **{_clean_t:.2f} seconds**")
 
-        if len(outlier_df_cached) > 0:
+        if len(outlier_df_cached) > 0 or len(export_outlier_df_cached) > 0:
             st.markdown("**Outlier Details** — rows removed and reasons:")
             # Use actual thresholds stored by apply_outlier_filters
             _min_qty_thr = filter_stats_cached.get("min_qty_threshold", 0.0)
@@ -954,53 +1030,60 @@ if st.session_state.selected_molecule:
                 if row.get("outlier_reason_qty", False):
                     reasons.append(f"Low Quantity (QTY < {_min_qty_thr:.0f})")
                 if row.get("outlier_reason_price", False):
-                    reasons.append(f"Price Out of Range (₹{_price_lower:.0f}–₹{_price_upper:.0f})")
+                    reasons.append(f"Price Out of Range (\u20b9{_price_lower:.0f}\u2013\u20b9{_price_upper:.0f})")
                 if row.get("outlier_reason_item"):
                     reasons.append(f"Irrelevant Item: {row['outlier_reason_item']}")
+                if row.get("outlier_reason_usp"):
+                    reasons.append(f"USP Unvalidated: {row['outlier_reason_usp']}")
                 return " | ".join(reasons) if reasons else "Unknown"
 
-            outlier_display = outlier_df_cached.copy()
-            outlier_display["Reason"] = outlier_display.apply(_outlier_reason, axis=1)
+            # Tag each set with Data Source and combine
+            _import_out = outlier_df_cached.copy()
+            _import_out["Data Source"] = "Import"
+            _export_out = export_outlier_df_cached.copy()
+            _export_out["Data Source"] = "Export"
+            _all_outliers = pd.concat([_import_out, _export_out], ignore_index=True)
+
+            _all_outliers["Reason"] = _all_outliers.apply(_outlier_reason, axis=1)
 
             # Find entity name column
             _ent_col = None
             for _c in ["Supp_Name", "IMPORTER", "entity_name"]:
-                if _c in outlier_display.columns:
+                if _c in _all_outliers.columns:
                     _ent_col = _c
                     break
 
-            _disp_cols = {}
+            _disp_cols = {"Data Source": "Data Source"}
             if _ent_col:
                 _disp_cols[_ent_col] = "Supplier / Importer"
-            if "yyyymm" in outlier_display.columns:
+            if "yyyymm" in _all_outliers.columns:
                 _disp_cols["yyyymm"] = "Date (yyyymm)"
-            # Show item description for item-relevance outliers
             for _icol in ["ITEM", "item", "ITEM_DESC", "DESCRIPTION", "PRODUCT"]:
-                if _icol in outlier_display.columns:
+                if _icol in _all_outliers.columns:
                     _disp_cols[_icol] = "Item Description"
                     break
-            if "QTY" in outlier_display.columns:
+            if "QTY" in _all_outliers.columns:
                 _disp_cols["QTY"] = "QTY"
-            if "unit_price" in outlier_display.columns:
-                _disp_cols["unit_price"] = "Unit Price (₹)"
+            if "unit_price" in _all_outliers.columns:
+                _disp_cols["unit_price"] = "Unit Price (\u20b9)"
             _disp_cols["Reason"] = "Reason"
 
-            _show_cols = [c for c in _disp_cols if c in outlier_display.columns]
+            _show_cols = [c for c in _disp_cols if c in _all_outliers.columns]
             _show_df = (
-                outlier_display[_show_cols]
+                _all_outliers[_show_cols]
                 .rename(columns=_disp_cols)
                 .reset_index(drop=True)
             )
 
-            # Build per-column config so wide columns (Reason, Item, Supplier) get
-            # enough space and text is never clipped.
             _col_cfg = {}
             for _col_label in _show_df.columns:
-                if _col_label in ("Supplier / Importer", "Item Description"):
+                if _col_label == "Data Source":
+                    _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="small")
+                elif _col_label in ("Supplier / Importer", "Item Description"):
                     _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="large")
                 elif _col_label == "Reason":
                     _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="large")
-                elif _col_label in ("QTY", "Unit Price (₹)", "Date (yyyymm)"):
+                elif _col_label in ("QTY", "Unit Price (\u20b9)", "Date (yyyymm)"):
                     _col_cfg[_col_label] = st.column_config.TextColumn(_col_label, width="small")
 
             _tbl_height = min(400, 35 + len(_show_df) * 35)
@@ -1160,12 +1243,12 @@ if st.session_state.selected_molecule:
         # ─────────────────────────────────────────────────────────────────────────
         # SECTION 1 — 6 KPI Cards with Sparklines
         # ─────────────────────────────────────────────────────────────────────────
-        cipla_df_f = filtered_df[filtered_df["source"] == "Cipla"]
+        cipla_df_f = filtered_df[filtered_df["source"] == "Client A"]
         market_df_f = filtered_df[filtered_df["source"] == "Buyer"]
         buyer_df_f = filtered_df[filtered_df["source"] == "Buyer"]
 
         cipla_price = _safe_wtd_avg(cipla_df_f["Sum_of_TOTAL_VALUE"], cipla_df_f["Sum_of_QTY"])
-        market_price = _safe_wtd_avg(market_df_f["Sum_of_TOTAL_VALUE"], market_df_f["Sum_of_QTY"]) * import_duty_mult
+        market_price = _safe_wtd_avg(_buyer_total_value_col(market_df_f), market_df_f["Sum_of_QTY"])
         cipla_n_records = len(cipla_df_f)
         cipla_total_qty = cipla_df_f["Sum_of_QTY"].sum()
         market_n_ent = market_df_f["entity_name"].nunique()
@@ -1176,15 +1259,15 @@ if st.session_state.selected_molecule:
         if len(buyer_df_f) > 0:
             ent_prices = (
                 buyer_df_f.groupby("entity_name")
-                .apply(lambda g: _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]))
+                .apply(lambda g: _safe_wtd_avg(_buyer_total_value_col(g), g["Sum_of_QTY"]))
                 .reset_index(name="wtd_price")
             )
             ent_prices = ent_prices[ent_prices["wtd_price"] > 0]
             if len(ent_prices) > 0:
                 min_row = ent_prices.loc[ent_prices["wtd_price"].idxmin()]
                 max_row = ent_prices.loc[ent_prices["wtd_price"].idxmax()]
-                low_price, low_ent = min_row["wtd_price"] * import_duty_mult, min_row["entity_name"]
-                high_price, high_ent = max_row["wtd_price"] * import_duty_mult, max_row["entity_name"]
+                low_price, low_ent = min_row["wtd_price"], min_row["entity_name"]
+                high_price, high_ent = max_row["wtd_price"], max_row["entity_name"]
 
         cost_adv = cipla_price - market_price if market_price > 0 else 0.0
         cost_pct = abs(cost_adv / market_price * 100) if market_price > 0 else 0.0
@@ -1197,11 +1280,13 @@ if st.session_state.selected_molecule:
             for m in months:
                 mdf = consolidated_df[consolidated_df["yyyymm"] == m]
                 mdf = src_fn(mdf)
-                vals.append(_safe_wtd_avg(mdf["Sum_of_TOTAL_VALUE"], mdf["Sum_of_QTY"]))
+                is_buyer = mdf["source"].eq("Buyer").all() if len(mdf) > 0 else False
+                val_series = _buyer_total_value_col(mdf) if is_buyer else mdf["Sum_of_TOTAL_VALUE"]
+                vals.append(_safe_wtd_avg(val_series, mdf["Sum_of_QTY"]))
             return vals
 
         cipla_spark = _render_sparkline(
-            _monthly_wtd(lambda d: d[d["source"] == "Cipla"], months_sorted_all), "#3b82f6"
+            _monthly_wtd(lambda d: d[d["source"] == "Client A"], months_sorted_all), "#3b82f6"
         )
         market_spark = _render_sparkline(
             _monthly_wtd(lambda d: d[d["source"] == "Buyer"], months_sorted_all), "#0891b2"
@@ -1249,7 +1334,7 @@ if st.session_state.selected_molecule:
         with k1:
             st.markdown(f"""
             <div class="pi-kpi-card" style="border-top-color:#3b82f6;">
-              <div class="pi-kpi-label">Cipla WTD Avg · ERP</div>
+              <div class="pi-kpi-label">Client A WTD Avg · ERP</div>
               <div class="pi-kpi-value">₹{cipla_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#eff6ff;color:#1d4ed8;">{month_context}</span></div>
               <div class="pi-kpi-note">{cipla_n_records} POs · {fmt_qty(cipla_total_qty)} {uom}</div>
@@ -1263,7 +1348,7 @@ if st.session_state.selected_molecule:
               <div class="pi-kpi-label">EXIM Market Avg (Import)</div>
               <div class="pi-kpi-value">₹{market_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#ecfeff;color:#0891b2;">{market_n_ent} competitors</span></div>
-              <div class="pi-kpi-note">EXIM import data · incl. {import_duty_pct}% duty</div>
+              <div class="pi-kpi-note">EXIM import data · duty applied per country</div>
               {market_spark}
             </div>
             """, unsafe_allow_html=True)
@@ -1298,7 +1383,7 @@ if st.session_state.selected_molecule:
               <div class="pi-kpi-label">Lowest Competitor</div>
               <div class="pi-kpi-value">₹{low_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#fffbeb;color:#d97706;">{low_ent[:22] if low_ent != "—" else "—"}</span></div>
-              <div class="pi-kpi-note">period avg · incl. {import_duty_pct}% duty</div>
+              <div class="pi-kpi-note">period avg · duty applied per country</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1308,7 +1393,7 @@ if st.session_state.selected_molecule:
               <div class="pi-kpi-label">Highest Competitor</div>
               <div class="pi-kpi-value">₹{high_price:,.0f} <span>/{uom}</span></div>
               <div><span class="pi-kpi-badge" style="background:#fff1f2;color:#dc2626;">{high_ent[:22] if high_ent != "—" else "—"}</span></div>
-              <div class="pi-kpi-note">premium grade · incl. {import_duty_pct}% duty</div>
+              <div class="pi-kpi-note">premium grade · duty applied per country</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1318,7 +1403,7 @@ if st.session_state.selected_molecule:
         # ─────────────────────────────────────────────────────────────────────────
         # LLM PANEL 1 — Buyer Price Trend Analysis
         # ─────────────────────────────────────────────────────────────────────────
-        _p1_cipla_df = filtered_df[filtered_df["source"] == "Cipla"]
+        _p1_cipla_df = filtered_df[filtered_df["source"] == "Client A"]
         _p1_buyer_df = filtered_df[filtered_df["source"] == "Buyer"]
 
         _p1_empty = len(_p1_cipla_df) == 0 and len(_p1_buyer_df) == 0
@@ -1327,7 +1412,7 @@ if st.session_state.selected_molecule:
         <div class="pi-page-body">
         <div class="pi-card">
         <div class="pi-section-header">BUYER PRICE TREND ANALYSIS</div>
-        <div class="pi-section-title">Cipla Avg vs EXIM Market Avg — Monthly Trend</div>
+        <div class="pi-section-title">Client A Avg vs EXIM Market Avg — Monthly Trend</div>
         """ + f'<div class="pi-section-sub">Buyer perspective · {month_context} · {uom}</div>' + '<div class="pi-card-content">')
 
         if _p1_empty:
@@ -1341,23 +1426,67 @@ if st.session_state.selected_molecule:
                 _cm = _p1_cipla_df[_p1_cipla_df["yyyymm"] == _m]
                 _p1_cipla_monthly[_m] = _safe_wtd_avg(_cm["Sum_of_TOTAL_VALUE"], _cm["Sum_of_QTY"])
                 _bm = _p1_buyer_df[_p1_buyer_df["yyyymm"] == _m]
-                _p1_buyer_monthly[_m] = _safe_wtd_avg(_bm["Sum_of_TOTAL_VALUE"], _bm["Sum_of_QTY"])
+                _p1_buyer_monthly[_m] = _safe_wtd_avg(_buyer_total_value_col(_bm), _bm["Sum_of_QTY"])
 
             _p1_labels = [yyyymm_to_label(m) for m in _p1_months]
-            _p1_cipla_vals = [_p1_cipla_monthly[m] for m in _p1_months]
-            _p1_buyer_vals = [_p1_buyer_monthly[m] for m in _p1_months]
+            # Replace 0 with None so Plotly skips those points and connects
+            # the surrounding non-zero values directly (no dip to zero)
+            _p1_cipla_vals = [v if v > 0 else None for v in (_p1_cipla_monthly[m] for m in _p1_months)]
+            _p1_buyer_vals = [v if v > 0 else None for v in (_p1_buyer_monthly[m] for m in _p1_months)]
+
+            # Per-vendor Cipla monthly avg (filtered by active date range)
+            _p1_vendor_monthly = {}  # {display_label: {yyyymm: avg_price}}
+            if not cipla_vendor_df_cached.empty:
+                _vc_filtered = cipla_vendor_df_cached[
+                    (cipla_vendor_df_cached["yyyymm"] >= _f_from_yyyymm)
+                    & (cipla_vendor_df_cached["yyyymm"] <= _f_to_yyyymm)
+                ]
+                _has_imp_dom = "imported_domestic" in _vc_filtered.columns
+                _vc_group_cols = ["vendor_name", "imported_domestic"] if _has_imp_dom else ["vendor_name"]
+                for _vkey, _vgrp in _vc_filtered.groupby(_vc_group_cols):
+                    if _has_imp_dom:
+                        _vname, _imp_dom = _vkey
+                        _vlabel = f"{_vname} · {str(_imp_dom).capitalize()}"
+                    else:
+                        _vname = _vkey
+                        _vlabel = _vname
+                    _p1_vendor_monthly[_vlabel] = {
+                        row["yyyymm"]: row["Avg_PRICE"] for _, row in _vgrp.iterrows()
+                    }
 
             # Build Plotly figure
             _p1_fig = go.Figure()
-            _p1_fig.add_trace(go.Scatter(
-                x=_p1_labels, y=_p1_cipla_vals,
-                mode="lines+markers", name="Cipla Avg Price",
-                line=dict(color="#3b82f6", dash="dash"), marker=dict(size=6),
-            ))
+
+            # Per-vendor lines for Cipla
+            _vendor_colors = [
+                "#3b82f6", "#8b5cf6", "#06b6d4", "#f59e0b", "#10b981",
+                "#f97316", "#ec4899", "#6366f1", "#14b8a6", "#84cc16",
+            ]
+            if _p1_vendor_monthly:
+                for _vi, (_vlabel, _vprices) in enumerate(_p1_vendor_monthly.items()):
+                    _vvals = [_vprices.get(_m, None) or None for _m in _p1_months]
+                    _vvals = [v if v and v > 0 else None for v in _vvals]
+                    _p1_fig.add_trace(go.Scatter(
+                        x=_p1_labels, y=_vvals,
+                        mode="lines+markers",
+                        name=f"Client A · {_vlabel}",
+                        line=dict(color=_vendor_colors[_vi % len(_vendor_colors)], dash="dash", width=1.5),
+                        marker=dict(size=5),
+                        connectgaps=True,
+                    ))
+            else:
+                # Fallback: single Cipla overall line
+                _p1_fig.add_trace(go.Scatter(
+                    x=_p1_labels, y=_p1_cipla_vals,
+                    mode="lines+markers", name="Client A Avg Price",
+                    line=dict(color="#3b82f6", dash="dash"), marker=dict(size=6),
+                    connectgaps=True,
+                ))
             _p1_fig.add_trace(go.Scatter(
                 x=_p1_labels, y=_p1_buyer_vals,
                 mode="lines+markers", name="EXIM Market Avg (Buyer)",
                 line=dict(color="#0891b2"), marker=dict(size=6),
+                connectgaps=True,
             ))
             _p1_fig.update_layout(
                 height=340,
@@ -1426,12 +1555,12 @@ if st.session_state.selected_molecule:
                 _p1_prompt = (
                     f"You are a pharmaceutical procurement analyst. In 3-4 sentences, describe the price trend "
                     f"from the buyer's perspective for {selected_mol}. "
-                    f"Monthly Cipla avg prices: {_p1_cipla_dict}. "
+                    f"Monthly Client A avg prices: {_p1_cipla_dict}. "
                     f"Monthly EXIM buyer avg prices: {_p1_buyer_dict}. "
-                    f"In {pct_higher}% of months, buyers paid more than Cipla; in {pct_lower}% they paid less; "
+                    f"In {pct_higher}% of months, buyers paid more than Client A; in {pct_lower}% they paid less; "
                     f"in {pct_parity}% prices were at parity (within 2%). "
                     f"Period: {month_context}. "
-                    f"Highlight whether buyers are generally paying more or less than Cipla's internal price, "
+                    f"Highlight whether buyers are generally paying more or less than Client A's internal price, "
                     f"note any notable months or turning points, and give one actionable recommendation."
                 )
                 _p1_llm_text = _llm_analysis(_p1_prompt)
@@ -1448,13 +1577,13 @@ if st.session_state.selected_molecule:
                 # Fallback rule-based text
                 if pct_lower >= pct_higher:
                     _p1_fallback = (
-                        f"Buyers are generally purchasing {selected_mol} below Cipla's internal benchmark price "
+                        f"Buyers are generally purchasing {selected_mol} below Client A's internal benchmark price "
                         f"({pct_lower}% of months), suggesting a competitive external market."
                     )
                 else:
                     _p1_fallback = (
-                        f"Buyers are paying above Cipla's internal benchmark in {pct_higher}% of the selected months, "
-                        f"indicating Cipla has a cost advantage in external procurement."
+                        f"Buyers are paying above Client A's internal benchmark in {pct_higher}% of the selected months, "
+                        f"indicating Client A has a cost advantage in external procurement."
                     )
                 _html(f"""
                 <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
@@ -1468,7 +1597,7 @@ if st.session_state.selected_molecule:
         # ─────────────────────────────────────────────────────────────────────────
         # LLM PANEL 2 — Bargain Buyers
         # ─────────────────────────────────────────────────────────────────────────
-        _p2_cipla_df = filtered_df[filtered_df["source"] == "Cipla"]
+        _p2_cipla_df = filtered_df[filtered_df["source"] == "Client A"]
         _p2_buyer_df = filtered_df[filtered_df["source"] == "Buyer"]
         _p2_cipla_price = _safe_wtd_avg(_p2_cipla_df["Sum_of_TOTAL_VALUE"], _p2_cipla_df["Sum_of_QTY"])
         _p2_bargain_threshold = _p2_cipla_price
@@ -1478,7 +1607,7 @@ if st.session_state.selected_molecule:
         <div class="pi-card">
         <div class="pi-section-header">BARGAIN BUYER ANALYSIS</div>
         <div class="pi-section-title">Buyers Purchasing at Below-Benchmark Prices</div>
-        <div class="pi-section-sub">Identified buyers · {month_context} · threshold = Cipla avg price</div>
+        <div class="pi-section-sub">Identified buyers · {month_context} · threshold = Client A avg price</div>
         <div class="pi-card-content">
         """)
 
@@ -1489,7 +1618,7 @@ if st.session_state.selected_molecule:
             _p2_grp = (
                 _p2_buyer_df.groupby("entity_name")
                 .apply(lambda g: pd.Series({
-                    "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                    "wtd_price": _safe_wtd_avg(_buyer_total_value_col(g), g["Sum_of_QTY"]),
                     "total_qty": g["Sum_of_QTY"].sum(),
                     "total_value": g["Sum_of_TOTAL_VALUE"].sum(),
                 }))
@@ -1504,7 +1633,7 @@ if st.session_state.selected_molecule:
             _html(f"""
             <div style="font-size:0.85rem;color:#334155;margin-bottom:0.75rem;">
             <strong>{_p2_bargain_count}</strong> out of <strong>{_p2_total_buyers}</strong> buyers are purchasing
-            below Cipla's internal price benchmark
+            below Client A's internal price benchmark
             (threshold: ₹{_p2_bargain_threshold:,.0f}/{uom}).
             </div>
             """)
@@ -1535,7 +1664,7 @@ if st.session_state.selected_molecule:
                 _html(f"""
                 <table class="pi-data-table" style="width:100%;border-collapse:collapse;margin-top:0.5rem;">
                 <thead><tr>
-                <th>Buyer</th><th>Avg Price</th><th>Volume ({uom})</th><th>% vs Cipla</th><th>Position</th>
+                <th>Buyer</th><th>Avg Price</th><th>Volume ({uom})</th><th>% vs Client A</th><th>Position</th>
                 </tr></thead>
                 <tbody>{_p2_rows}</tbody>
                 </table>
@@ -1559,11 +1688,11 @@ if st.session_state.selected_molecule:
                     ]
                     _p2_prompt = (
                         f"You are a pharmaceutical procurement analyst. "
-                        f"{_p2_bargain_count} buyers are purchasing {selected_mol} below Cipla's internal benchmark "
+                        f"{_p2_bargain_count} buyers are purchasing {selected_mol} below Client A's internal benchmark "
                         f"of ₹{_p2_cipla_price:.0f}/{uom} in {month_context}. "
                         f"The cheapest buyer is {_p2_cheapest_buyer} at ₹{_p2_cheapest_price:.0f}/{uom}. "
                         f"Bargain buyers: {_p2_bargain_list}. "
-                        f"In 3-4 sentences, explain what this means for Cipla's procurement position and "
+                        f"In 3-4 sentences, explain what this means for Client A's procurement position and "
                         f"give one concrete negotiation insight."
                     )
                     _p2_llm_text = _llm_analysis(_p2_prompt)
@@ -1582,11 +1711,179 @@ if st.session_state.selected_molecule:
                 _html(f"""
                 <div style="background:#f0f9ff;border-left:3px solid #0891b2;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.85rem;color:#0f172a;line-height:1.6;">
                 <span style="font-weight:700;">📊 Analysis · </span>
-                No buyers are purchasing {selected_mol} below the 5% discount threshold relative to Cipla's benchmark
+                No buyers are purchasing {selected_mol} below the 5% discount threshold relative to Client A's benchmark
                 price of ₹{_p2_cipla_price:,.0f}/{uom} in {month_context}.
-                This indicates Cipla's procurement price is competitive in the current market.
+                This indicates Client A's procurement price is competitive in the current market.
                 </div>
                 """)
+
+        _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
+        _html('<div style="height:1rem;"></div>')
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # GRADE-WISE BUYER PRICE ANALYSIS
+        # ─────────────────────────────────────────────────────────────────────────
+        _gw_buyer_df  = filtered_df[filtered_df["source"] == "Buyer"]
+        _gw_cipla_df  = filtered_df[filtered_df["source"] == "Client A"]
+        _gw_cipla_price = _safe_wtd_avg(_gw_cipla_df["Sum_of_TOTAL_VALUE"], _gw_cipla_df["Sum_of_QTY"])
+
+        _html(f"""
+        <div class="pi-page-body">
+        <div class="pi-card">
+        <div class="pi-section-header">GRADE-WISE BUYER PRICE ANALYSIS</div>
+        <div class="pi-section-title">Buyer Price Difference by Grade Spec vs Client A Avg Price</div>
+        <div class="pi-section-sub">Each dot = buyer · coloured by grade · X = % diff from Client A baseline · {month_context}</div>
+        <div class="pi-card-content" style="margin-top:1rem;">
+        """)
+
+        if _gw_buyer_df.empty or _gw_cipla_price <= 0:
+            _html('<div class="pi-info-banner">Insufficient data for grade-wise analysis.</div>')
+        else:
+            # Compute wtd avg price per (buyer, grade)
+            _gw_grp = (
+                _gw_buyer_df.groupby(["entity_name", "GRADE_SPEC"])
+                .apply(lambda g: pd.Series({
+                    "wtd_price": _safe_wtd_avg(_buyer_total_value_col(g), g["Sum_of_QTY"]),
+                    "sum_qty":   g["Sum_of_QTY"].sum(),
+                }))
+                .reset_index()
+            )
+            _gw_grp = _gw_grp[_gw_grp["wtd_price"] > 0].copy()
+
+            # Limit to top 25 buyers by total quantity (chart readability)
+            _gw_top_buyers = (
+                _gw_grp.groupby("entity_name")["sum_qty"].sum()
+                .nlargest(25).index.tolist()
+            )
+            _gw_grp = _gw_grp[_gw_grp["entity_name"].isin(_gw_top_buyers)].copy()
+
+            # % difference from Cipla baseline
+            _gw_grp["pct_diff"] = (
+                (_gw_grp["wtd_price"] - _gw_cipla_price) / _gw_cipla_price * 100
+            )
+
+            # Average row per grade
+            _gw_avg = (
+                _gw_grp.groupby("GRADE_SPEC")
+                .agg(pct_diff=("pct_diff", "mean"), wtd_price=("wtd_price", "mean"),
+                     sum_qty=("sum_qty", "sum"))
+                .reset_index()
+            )
+            _gw_avg["entity_name"] = "▸ Average"
+
+            # Y-axis order: buyers sorted by overall mean pct_diff (ascending),
+            # with "Average" pinned at the very bottom
+            _gw_buyer_order = (
+                _gw_grp.groupby("entity_name")["pct_diff"].mean()
+                .sort_values(ascending=True).index.tolist()
+            )
+            _gw_y_order = ["▸ Average"] + _gw_buyer_order
+
+            # Grade colour palette (matches QYOBO-style IP/USP/EP semantics)
+            _GRADE_PAL = {
+                "IP":  "#3b82f6",   # blue — India
+                "USP": "#9ca3af",  # gray — United States
+                "EP":  "#06b6d4",  # cyan — Europe
+                "IH":  "#f43f5e",  # rose — In-house
+                "BP":  "#a855f7",  # purple — British
+                "JP":  "#1e293b",  # near-black — Japan
+            }
+            _GW_FALLBACK = ["#f59e0b","#10b981","#6366f1","#e76f51","#84cc16"]
+            _gw_all_grades = sorted(_gw_grp["GRADE_SPEC"].dropna().unique())
+
+            _gw_fig = go.Figure()
+
+            for _gi, _gspec in enumerate(_gw_all_grades):
+                _gc = _GRADE_PAL.get(str(_gspec).strip(), _GW_FALLBACK[_gi % len(_GW_FALLBACK)])
+
+                # Buyer dots
+                _gd = _gw_grp[_gw_grp["GRADE_SPEC"] == _gspec]
+                if not _gd.empty:
+                    _gw_fig.add_trace(go.Scatter(
+                        x=_gd["pct_diff"],
+                        y=_gd["entity_name"],
+                        mode="markers",
+                        name=str(_gspec),
+                        legendgroup=str(_gspec),
+                        marker=dict(color=_gc, size=11, opacity=0.82,
+                                    line=dict(width=1.5, color="white")),
+                        customdata=list(zip(_gd["wtd_price"], _gd["sum_qty"])),
+                        hovertemplate=(
+                            f"<b>%{{y}}</b> · Grade: {_gspec}<br>"
+                            f"Avg Price: ₹%{{customdata[0]:,.0f}} /{uom}<br>"
+                            f"Volume: %{{customdata[1]:,.0f}} {uom}<br>"
+                            "vs Client A: <b>%{x:+.1f}%</b><extra></extra>"
+                        ),
+                        showlegend=True,
+                    ))
+
+                # Average dot — with % label
+                _ga = _gw_avg[_gw_avg["GRADE_SPEC"] == _gspec]
+                if not _ga.empty:
+                    _avg_pct = float(_ga["pct_diff"].iloc[0])
+                    _avg_price = float(_ga["wtd_price"].iloc[0])
+                    _gw_fig.add_trace(go.Scatter(
+                        x=_ga["pct_diff"],
+                        y=_ga["entity_name"],
+                        mode="markers+text",
+                        name=str(_gspec),
+                        legendgroup=str(_gspec),
+                        showlegend=False,
+                        marker=dict(color=_gc, size=13, opacity=1,
+                                    line=dict(width=2, color="white")),
+                        text=[f"{_avg_pct:+.0f}%"],
+                        textposition="bottom center",
+                        textfont=dict(size=10, color=_gc),
+                        customdata=[[_avg_price, _ga["sum_qty"].iloc[0]]],
+                        hovertemplate=(
+                            f"<b>Average</b> · Grade: {_gspec}<br>"
+                            f"Avg Price: ₹{_avg_price:,.0f} /{uom}<br>"
+                            "vs Client A: <b>%{x:+.1f}%</b><extra></extra>"
+                        ),
+                    ))
+
+            # Cipla baseline annotation
+            _gw_fig.add_vline(
+                x=0, line_color="#1d4ed8", line_width=2, line_dash="solid",
+                annotation_text=f"Client A ₹{_gw_cipla_price:,.0f}",
+                annotation_position="top",
+                annotation_font_size=10, annotation_font_color="#1d4ed8",
+            )
+
+            # Subtle separator above the Average row
+            _gw_fig.add_hline(
+                y="▸ Average", line_color="#cbd5e1", line_width=1.5, line_dash="dot",
+            )
+
+            _chart_height = max(420, 30 * (len(_gw_y_order) + 3))
+            _gw_fig.update_layout(
+                height=_chart_height,
+                paper_bgcolor="white",
+                plot_bgcolor="#fafbff",
+                xaxis=dict(
+                    title="% Price Difference from Client A Avg",
+                    tickformat="+.0f",
+                    ticksuffix="%",
+                    zeroline=False,
+                    showgrid=True, gridcolor="#e4e9f2", gridwidth=1, griddash="dot",
+                ),
+                yaxis=dict(
+                    categoryorder="array",
+                    categoryarray=_gw_y_order,
+                    showgrid=True, gridcolor="#f1f5f9", gridwidth=1,
+                    tickfont=dict(size=10),
+                ),
+                legend=dict(
+                    title=dict(text="Grade Spec", font=dict(size=11)),
+                    orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
+                    font=dict(size=11),
+                    itemsizing="constant",
+                ),
+                margin=dict(l=10, r=30, t=50, b=40),
+                font=dict(size=11),
+            )
+
+            st.plotly_chart(_gw_fig, use_container_width=True)
 
         _html("</div></div></div>")  # pi-card-content, pi-card, pi-page-body
         _html('<div style="height:1rem;"></div>')
@@ -1656,7 +1953,8 @@ if st.session_state.selected_molecule:
                     _sdf = _p3_supplier_df[
                         (_p3_supplier_df["entity_name"] == _sup) & (_p3_supplier_df["yyyymm"] == _m)
                     ]
-                    _sup_monthly_price.append(_safe_wtd_avg(_sdf["Sum_of_TOTAL_VALUE"], _sdf["Sum_of_QTY"]))
+                    _v = _safe_wtd_avg(_sdf["Sum_of_TOTAL_VALUE"], _sdf["Sum_of_QTY"])
+                    _sup_monthly_price.append(_v if _v > 0 else None)
                 _p3_fig.add_trace(go.Scatter(
                     name=_sup, x=_p3_labels, y=_sup_monthly_price,
                     mode="lines+markers",
@@ -1732,8 +2030,8 @@ if st.session_state.selected_molecule:
                     f"Top suppliers by avg price: {_p3_top5_summary}. "
                     f"In 3-4 sentences, identify which suppliers have the highest or lowest prices, "
                     f"whether prices are rising or falling, "
-                    f"what this implies for Cipla's procurement cost, and give one strategic recommendation "
-                    f"for Cipla's sourcing team."
+                    f"what this implies for Client A's procurement cost, and give one strategic recommendation "
+                    f"for Client A's sourcing team."
                 )
                 _p3_llm_text = _llm_analysis(_p3_prompt)
                 _p3_cache[_p3_cache_key] = _p3_llm_text
@@ -1918,7 +2216,7 @@ if st.session_state.selected_molecule:
                     f"Suppliers with decreasing volumes (avg MoM < {_VOL_DECREASE_THRESHOLD}%): {_p4_decreasing_list}. "
                     f"In 3-4 sentences, explain what these volume shifts mean for supply security, "
                     f"which suppliers are gaining or losing share, "
-                    f"and give one procurement risk or opportunity recommendation for Cipla."
+                    f"and give one procurement risk or opportunity recommendation for Client A."
                 )
                 _p4_llm_text = _llm_analysis(_p4_prompt)
                 _p4_cache[_p4_cache_key] = _p4_llm_text
@@ -1961,20 +2259,23 @@ if st.session_state.selected_molecule:
         all_ent_agg = (
             s2_df.groupby(["entity_name", "source"])
             .apply(lambda g: pd.Series({
-                "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                "wtd_price": _safe_wtd_avg(
+                    _buyer_total_value_col(g) if g.name[1] == "Buyer" else g["Sum_of_TOTAL_VALUE"],
+                    g["Sum_of_QTY"]
+                ),
                 "total_qty": g["Sum_of_QTY"].sum(),
             }))
             .reset_index()
         )
         all_ent_agg = all_ent_agg[all_ent_agg["wtd_price"] > 0]
 
-        cipla_ent_row = all_ent_agg[all_ent_agg["source"] == "Cipla"]
+        cipla_ent_row = all_ent_agg[all_ent_agg["source"] == "Client A"]
         non_cipla_rows = all_ent_agg[all_ent_agg["source"] == "Buyer"].sort_values("wtd_price").reset_index(drop=True)
         cipla_bar_price = cipla_ent_row["wtd_price"].mean() if len(cipla_ent_row) > 0 else cipla_price
 
         # Bar chart data
-        s2_market_df = s2_df[s2_df["source"] != "Cipla"]
-        s2_market_price = _safe_wtd_avg(s2_market_df["Sum_of_TOTAL_VALUE"], s2_market_df["Sum_of_QTY"])
+        s2_market_df = s2_df[s2_df["source"] != "Client A"]
+        s2_market_price = _safe_wtd_avg(_buyer_total_value_col(s2_market_df), s2_market_df["Sum_of_QTY"])
 
         bar_items_competitor = []
         for _, row in non_cipla_rows.iterrows():
@@ -1983,7 +2284,7 @@ if st.session_state.selected_molecule:
         cipla_bar_item = None
         market_bar_item = None
         if len(cipla_ent_row) > 0:
-            cipla_bar_item = {"entity": "★ Cipla", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()}
+            cipla_bar_item = {"entity": "★ Client A", "price": cipla_bar_price, "type": "cipla", "qty": cipla_ent_row["total_qty"].sum()}
         if s2_market_price > 0:
             market_bar_item = {"entity": "EXIM Avg", "price": s2_market_price, "type": "market", "qty": s2_market_df["Sum_of_QTY"].sum()}
 
@@ -2052,7 +2353,7 @@ if st.session_state.selected_molecule:
             bar_html = f"""
             <div class="pi-card" style="margin-bottom:0.5rem;">
               <div class="pi-section-title">WTD Average Price Comparison (₹/{uom})</div>
-              <div class="pi-section-sub">Cipla vs competitors · {month_context}</div>
+              <div class="pi-section-sub">Client A vs competitors · {month_context}</div>
               <div style="padding:0.2rem 0;">
             """
             for r in bar_items_sorted:
@@ -2061,7 +2362,7 @@ if st.session_state.selected_molecule:
                 price_val = r["price"]
                 if r["type"] == "cipla":
                     fill = f"background:linear-gradient(90deg,#1d4ed8,#3b82f6);width:{pct}%"
-                    lbl_cls = "cipla"
+                    lbl_cls = "client-a"
                     badge = '<span class="badge badge-blue">Benchmark</span>'
                 elif r["type"] == "market":
                     fill = f"background:rgba(8,145,178,0.35);width:{pct}%"
@@ -2120,7 +2421,7 @@ if st.session_state.selected_molecule:
                 cipla_ent_name = cipla_ent_row.iloc[0]["entity_name"]
                 cipla_qty_disp = cipla_ent_row["total_qty"].sum()
                 table_rows += f"""
-                <tr class="cipla-row">
+                <tr class="client-a-row">
                   <td>
                     <div style="display:flex;align-items:center;gap:7px;">
                       <div class="pi-av" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);">CI</div>
@@ -2137,7 +2438,7 @@ if st.session_state.selected_molecule:
                 </tr>
                 """
 
-            # Paginated non-Cipla rows
+            # Paginated non-Client A rows
             comp_page = st.session_state.get("comp_table_page", 1)
             ct_start = (comp_page - 1) * _PAGE_SIZE
             ct_end = ct_start + _PAGE_SIZE
@@ -2188,7 +2489,7 @@ if st.session_state.selected_molecule:
                     <th>Company</th>
                     <th>WTD Avg</th>
                     <th>Volume ({uom})</th>
-                    <th>vs Cipla</th>
+                    <th>vs Client A</th>
                     <th>Position</th>
                   </tr>
                 </thead>
@@ -2207,9 +2508,12 @@ if st.session_state.selected_molecule:
         # ─────────────────────────────────────────────────────────────────────────
         # Group by entity + yyyymm (buyer-only for competitors, plus Cipla)
         bubble_df = (
-            filtered_df[filtered_df["source"].isin(["Buyer", "Cipla"])].groupby(["entity_name", "yyyymm", "source"])
+            filtered_df[filtered_df["source"].isin(["Buyer", "Client A"])].groupby(["entity_name", "yyyymm", "source"])
             .apply(lambda g: pd.Series({
-                "wtd_price": _safe_wtd_avg(g["Sum_of_TOTAL_VALUE"], g["Sum_of_QTY"]),
+                "wtd_price": _safe_wtd_avg(
+                    _buyer_total_value_col(g) if g.name[2] == "Buyer" else g["Sum_of_TOTAL_VALUE"],
+                    g["Sum_of_QTY"]
+                ),
                 "sum_qty":   g["Sum_of_QTY"].sum(),
                 "total_val": g["Sum_of_TOTAL_VALUE"].sum(),
             }))
@@ -2218,7 +2522,7 @@ if st.session_state.selected_molecule:
         bubble_df = bubble_df[bubble_df["wtd_price"] > 0].copy()
         bubble_df["month_label"] = bubble_df["yyyymm"].apply(yyyymm_to_label)
 
-        cipla_bubble_ents = set(bubble_df[bubble_df["source"] == "Cipla"]["entity_name"].unique())
+        cipla_bubble_ents = set(bubble_df[bubble_df["source"] == "Client A"]["entity_name"].unique())
 
         # Top 25% by value: total value per entity across filtered_df
         ent_total_val = bubble_df.groupby("entity_name")["total_val"].sum()
@@ -2238,7 +2542,7 @@ if st.session_state.selected_molecule:
             if ent in cipla_bubble_ents:
                 entity_colors_b[ent] = "#1d4ed8"
             else:
-                entity_colors_b[ent] = _avatar_color(b_color_idx)
+                entity_colors_b[ent] = DOT_CHART_COLORS[b_color_idx % len(DOT_CHART_COLORS)]
                 b_color_idx += 1
 
         # Ordered month labels
@@ -2275,22 +2579,22 @@ if st.session_state.selected_molecule:
                     annotation_font_size=9, annotation_font_color="#64748b",
                 )
 
-        # Build Cipla monthly lookup for comparison in hover tooltips
+        # Build Client A monthly lookup for comparison in hover tooltips
         cipla_monthly_lookup = {}
-        for _, row in bubble_df[bubble_df["source"] == "Cipla"].iterrows():
+        for _, row in bubble_df[bubble_df["source"] == "Client A"].iterrows():
             cipla_monthly_lookup[row["yyyymm"]] = {
                 "wtd_price": row["wtd_price"],
                 "sum_qty": row["sum_qty"],
             }
 
-        cipla_mol_label = f"cipla-{selected_mol.lower()}"
+        client_a_mol_label = f"Client A ({selected_mol.upper()})"
 
         for ent in entities_bubble:
             ent_df = bubble_df[bubble_df["entity_name"] == ent].sort_values("yyyymm")
             color = entity_colors_b.get(ent, "#64748b")
-            # Cipla traces use "cipla-<molecule>" as the display name
+            # Client A traces use the benchmark label as the display name
             is_cipla = ent in cipla_bubble_ents
-            trace_name = cipla_mol_label if is_cipla else ent
+            trace_name = client_a_mol_label if is_cipla else ent
 
             if is_cipla:
                 custom = list(zip(
@@ -2326,7 +2630,7 @@ if st.session_state.selected_molecule:
                     f"Avg Price: ₹%{{y:,.0f}} /{uom}<br>"
                     f"Volume: %{{customdata[0]:,.0f}} {uom}<br>"
                     "─────────────────────────────<br>"
-                    f"<b>vs {cipla_mol_label}</b><br>"
+                    f"<b>vs {client_a_mol_label}</b><br>"
                     f"  Price:  ₹%{{y:,.0f}}  vs  ₹%{{customdata[2]:,.0f}}  →  %{{customdata[4]:+,.0f}} (%{{customdata[5]:+.1f}}%)<br>"
                     f"  Volume: %{{customdata[0]:,.0f}}  vs  %{{customdata[3]:,.0f}} {uom}<extra></extra>"
                 )
@@ -2346,12 +2650,12 @@ if st.session_state.selected_molecule:
                 hovertemplate=htemplate,
             ))
 
-        # Cipla reference line
+        # Client A reference line
         if cipla_price > 0 and all_month_labels:
             fig_bubble.add_hline(
                 y=cipla_price,
                 line_dash="dash", line_color="#1d4ed8", line_width=1.5,
-                annotation_text=f"Cipla ₹{cipla_price:,.0f}",
+                annotation_text=f"Client A ₹{cipla_price:,.0f}",
                 annotation_position="right",
                 annotation_font_size=10, annotation_font_color="#1d4ed8",
             )
@@ -2380,7 +2684,7 @@ if st.session_state.selected_molecule:
         _html(f"""
         <div class="pi-card" style="margin-bottom:0.5rem;">
           <div class="pi-section-title">Price over Time · Dot Chart</div>
-          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Dot = Entity · Hover for Cipla comparison</div>
+          <div class="pi-section-sub">X = Month · Y = Avg Price (₹/{uom}) · Dot = Entity · Hover for Client A comparison</div>
         </div>
         """)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -2397,7 +2701,7 @@ if st.session_state.selected_molecule:
 
         with t4_l:
             # Cipla Monthly table — driven by main top-level filters
-            cipla_filtered_full = filtered_df[filtered_df["source"] == "Cipla"]
+            cipla_filtered_full = filtered_df[filtered_df["source"] == "Client A"]
 
             cipla_sorted = cipla_filtered_full.sort_values("yyyymm").reset_index(drop=True)
 
@@ -2447,7 +2751,7 @@ if st.session_state.selected_molecule:
     <div class="pi-card" style="margin-bottom:0.5rem;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
     <div>
-    <div class="pi-section-title">Cipla — Monthly Price &amp; Volume</div>
+    <div class="pi-section-title">Client A — Monthly Price &amp; Volume</div>
     <div class="pi-section-sub">api = {selected_mol.upper()} · {month_context} · per grade &amp; UOM · Sum QTY · Avg PRICE</div>
     </div>
     <span class="badge badge-blue">ERP</span>
@@ -2552,7 +2856,7 @@ if st.session_state.selected_molecule:
     <thead>
     <tr>
     <th>SUPPLIER</th><th>GRADE</th>
-    <th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th><th>VS CIPLA</th>
+    <th>SUM OF QTY</th><th>TOTAL VALUE</th><th>AVG PRICE</th><th>VS CLIENT A</th>
     </tr>
     </thead>
     <tbody>{exim_rows_html}</tbody>
@@ -2563,6 +2867,106 @@ if st.session_state.selected_molecule:
             _pagination_bar(len(exim_agg), _PAGE_SIZE, exim_pg, "exim_table_page", "exim")
 
         st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # SECTION 5 — EXIM Export Price & Volume Summary
+        # ─────────────────────────────────────────────────────────────────────────
+        if not export_df_cached.empty:
+            # Apply same filters as the export sparkline / EXIM market avg
+            _exp_t_mask = (
+                (export_df_cached["UQC"].isin(_f_uoms))
+                & (export_df_cached["GRADE_SPEC"].isin(_f_grades))
+            )
+            if _f_from_yyyymm and _f_to_yyyymm:
+                _exp_t_mask = (
+                    _exp_t_mask
+                    & (export_df_cached["yyyymm"] >= _f_from_yyyymm)
+                    & (export_df_cached["yyyymm"] <= _f_to_yyyymm)
+                )
+            _exp_tbl_df = export_df_cached[_exp_t_mask].copy()
+
+            if not _exp_tbl_df.empty:
+                # Aggregate by month
+                _exp_agg = (
+                    _exp_tbl_df.groupby("yyyymm")
+                    .apply(lambda g: pd.Series({
+                        "grade_e":   g["GRADE_SPEC"].mode()[0] if len(g) > 0 else grade,
+                        "uom_e":     g["UQC"].mode()[0] if len(g) > 0 else uom,
+                        "sum_qty":   g["QTY"].sum(),
+                        "total_val": g["TOTAL_VALUE"].sum(),
+                        "avg_price": _safe_wtd_avg(g["TOTAL_VALUE"], g["QTY"]),
+                    }))
+                    .reset_index()
+                    .sort_values("yyyymm")
+                    .reset_index(drop=True)
+                )
+
+                # Pagination
+                exp_tbl_pg = st.session_state.get("export_table_page", 1)
+                exp_tbl_start = (exp_tbl_pg - 1) * _PAGE_SIZE
+                exp_tbl_end = exp_tbl_start + _PAGE_SIZE
+                _exp_page = _exp_agg.iloc[exp_tbl_start:exp_tbl_end]
+
+                max_qty_exp = _exp_page["sum_qty"].idxmax() if len(_exp_page) > 0 else None
+                min_qty_exp = _exp_page["sum_qty"].idxmin() if len(_exp_page) > 1 else None
+
+                exp_rows_html = ""
+                for idx_ex, row_ex in _exp_page.iterrows():
+                    qty_style_ex = ""
+                    if max_qty_exp is not None and idx_ex == max_qty_exp:
+                        qty_style_ex = 'style="color:#16a34a;font-weight:700;"'
+                    elif min_qty_exp is not None and idx_ex == min_qty_exp and len(_exp_page) > 1:
+                        qty_style_ex = 'style="color:#dc2626;font-weight:700;"'
+                    exp_rows_html += f"""
+                    <tr>
+                      <td>{yyyymm_to_label(row_ex["yyyymm"])}</td>
+                      <td>{row_ex["grade_e"]}</td>
+                      <td>{row_ex["uom_e"]}</td>
+                      <td {qty_style_ex}>{fmt_qty(row_ex["sum_qty"])}</td>
+                      <td>{fmt_inr(row_ex["total_val"])}</td>
+                      <td style="color:#7c3aed;font-weight:700;">\u20b9{row_ex["avg_price"]:,.0f}</td>
+                    </tr>
+                    """
+
+                total_qty_exp = _exp_tbl_df["QTY"].sum()
+                total_val_exp = _exp_tbl_df["TOTAL_VALUE"].sum()
+                wtd_avg_exp = _safe_wtd_avg(_exp_tbl_df["TOTAL_VALUE"], _exp_tbl_df["QTY"])
+                exp_rows_html += f"""
+                <tr class="footer-row">
+                  <td>WTD Avg</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>{fmt_qty(total_qty_exp)}</td>
+                  <td>{fmt_inr(total_val_exp)}</td>
+                  <td style="color:#7c3aed;font-weight:700;">\u20b9{wtd_avg_exp:,.0f}</td>
+                </tr>
+                """
+
+                st.markdown('<div class="pi-page-body">', unsafe_allow_html=True)
+                _html(f"""
+    <div class="pi-card" style="margin-bottom:0.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+    <div>
+    <div class="pi-section-title">EXIM \u2014 Export Price &amp; Volume Summary</div>
+    <div class="pi-section-sub">export · {month_context} · {uom} · Grade · Sum QTY (FOB) · Avg PRICE</div>
+    </div>
+    <span class="badge badge-purple">EXPORT</span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="pi-data-table">
+    <thead>
+    <tr>
+    <th>PERIOD</th><th>GRADE</th><th>UOM</th>
+    <th>SUM OF QTY</th><th>TOTAL VALUE (FOB)</th><th>AVG UNIT PRICE</th>
+    </tr>
+    </thead>
+    <tbody>{exp_rows_html}</tbody>
+    </table>
+    </div>
+    </div>
+    """)
+                _pagination_bar(len(_exp_agg), _PAGE_SIZE, exp_tbl_pg, "export_table_page", "export_tbl")
+                st.markdown("</div>", unsafe_allow_html=True)  # pi-page-body
 
         # ─────────────────────────────────────────────────────────────────────────
         # FOOTER
@@ -2579,7 +2983,7 @@ if st.session_state.selected_molecule:
             <a href="#">Documentation</a>
             <a href="#">Export</a>
             <a href="#">Support</a>
-            <a href="#">© 2026 Cipla Ltd</a>
+            <a href="#">© 2026 Client A Ltd</a>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -2594,7 +2998,7 @@ else:
       </h2>
       <p style="color:#64748b;font-size:1rem;max-width:600px;margin:0 auto 0 auto;">
         Search for a molecule above and click <strong>Analyse</strong> to explore
-        Cipla's procurement intelligence — price benchmarks, EXIM competitor analysis,
+        Client A's procurement intelligence — price benchmarks, EXIM competitor analysis,
         and monthly trend data.
       </p>
     </div>
@@ -2612,7 +3016,7 @@ else:
         <a href="#">Documentation</a>
         <a href="#">Export</a>
         <a href="#">Support</a>
-        <a href="#">© 2026 Cipla Ltd</a>
+        <a href="#">© 2026 Client A Ltd</a>
       </div>
     </div>
     """, unsafe_allow_html=True)
